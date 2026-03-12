@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Skit Planner — Receptive AI Content</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #F5F3F0;
+    color: #583B2E;
+    padding: 24px;
+  }
+  h1 {
+    font-size: 28px;
+    margin-bottom: 4px;
+    color: #583B2E;
+  }
+  .subtitle {
+    color: #999;
+    font-size: 14px;
+    margin-bottom: 20px;
+  }
+  .toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 16px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  button {
+    background: #F68313;
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 6px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.2s;
+  }
+  button:hover { background: #d9710f; }
+  button.secondary {
+    background: #fff;
+    color: #583B2E;
+    border: 1px solid #ddd;
+  }
+  button.secondary:hover { background: #F5E6D5; }
+  button.danger {
+    background: #e74c3c;
+  }
+  button.danger:hover { background: #c0392b; }
+  .filter-bar {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-left: auto;
+  }
+  .filter-bar select, .filter-bar input {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    font-size: 13px;
+    background: #fff;
+    color: #583B2E;
+  }
+  .table-wrap {
+    overflow-x: auto;
+    border-radius: 8px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+  }
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #fff;
+    min-width: 1200px;
+  }
+  thead th {
+    background: #583B2E;
+    color: #fff;
+    padding: 12px 14px;
+    text-align: left;
+    font-size: 13px;
+    font-weight: 600;
+    white-space: nowrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    cursor: pointer;
+    user-select: none;
+  }
+  thead th:hover { background: #6b4a3a; }
+  tbody td {
+    padding: 10px 14px;
+    border-bottom: 1px solid #f0ece8;
+    font-size: 13px;
+    vertical-align: top;
+    min-width: 80px;
+  }
+  tbody td[contenteditable="true"]:focus {
+    outline: 2px solid #F68313;
+    outline-offset: -2px;
+    background: #FFF8F0;
+  }
+  tbody tr:hover { background: #FDFBF9; }
+  tbody tr.selected { background: #FFF3E0; }
+  .row-num {
+    color: #bbb;
+    font-weight: 600;
+    width: 40px;
+    text-align: center;
+  }
+  .row-check {
+    width: 30px;
+    text-align: center;
+  }
+  .cast-size {
+    text-align: center;
+    width: 70px;
+  }
+  .category-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .cat-ai { background: #E8F5E9; color: #2E7D32; }
+  .cat-corporate { background: #E3F2FD; color: #1565C0; }
+  .cat-startup { background: #FFF3E0; color: #E65100; }
+  .cat-killer { background: #FCE4EC; color: #C62828; }
+  .stats {
+    display: flex;
+    gap: 24px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    color: #888;
+  }
+  .stats span { font-weight: 600; color: #583B2E; }
+  .empty-state {
+    text-align: center;
+    padding: 60px;
+    color: #ccc;
+    font-size: 16px;
+  }
+  @media (max-width: 768px) {
+    body { padding: 12px; }
+    h1 { font-size: 22px; }
+    .toolbar { flex-direction: column; }
+    .filter-bar { margin-left: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<h1>Skit Planner</h1>
+<p class="subtitle">Click any cell to edit. All changes stay in your browser.</p>
+
+<div class="stats" id="stats"></div>
+
+<div class="toolbar">
+  <button onclick="addRow()">+ Add Row</button>
+  <button class="secondary" onclick="downloadExcel()">Download Excel (.csv)</button>
+  <button class="secondary" onclick="saveLocal()">Save to Browser</button>
+  <button class="secondary" onclick="loadLocal()">Load Saved</button>
+  <button class="danger" onclick="deleteSelected()">Delete Selected</button>
+  <div class="filter-bar">
+    <input type="text" id="searchBox" placeholder="Search..." oninput="filterTable()">
+    <select id="catFilter" onchange="filterTable()">
+      <option value="">All Categories</option>
+      <option value="AI Agent">AI Agent</option>
+      <option value="Corporate">Corporate</option>
+      <option value="Tech/Startup">Tech/Startup</option>
+      <option value="Killer Script">Killer Script</option>
+    </select>
+    <select id="castFilter" onchange="filterTable()">
+      <option value="">All Cast Sizes</option>
+      <option value="2">2 people</option>
+      <option value="3">3 people</option>
+    </select>
+  </div>
+</div>
+
+<div class="table-wrap">
+  <table id="skitTable">
+    <thead>
+      <tr>
+        <th class="row-check"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()"></th>
+        <th class="row-num">#</th>
+        <th onclick="sortTable(2)">Inspiration</th>
+        <th onclick="sortTable(3)">Cast Size</th>
+        <th onclick="sortTable(4)">Characters</th>
+        <th onclick="sortTable(5)">Category</th>
+        <th onclick="sortTable(6)">Style Reference</th>
+        <th onclick="sortTable(7)">Script</th>
+        <th onclick="sortTable(8)">Environment</th>
+        <th onclick="sortTable(9)">Status</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<script>
+const COLS = ['inspiration','castSize','characters','category','styleRef','script','environment','status'];
+
+const initialData = [
+  // === KILLER SCRIPTS BATCH 1 ===
+  {inspiration:"The AI Is My Emotional Support",castSize:"2",characters:"A + B",category:"Killer Script",styleRef:"@mytechceo",script:"Complete",environment:"Office / desk setup",status:"Done"},
+  {inspiration:"We Trained It on Me",castSize:"2",characters:"A + B",category:"Killer Script",styleRef:"@mytechceo",script:"Complete",environment:"Office / desk setup",status:"Done"},
+  {inspiration:"The AI Got Poached",castSize:"2",characters:"A + B",category:"Killer Script",styleRef:"@mytechceo",script:"Complete",environment:"Office / desk setup",status:"Done"},
+  {inspiration:"The AI Caught Us Doing Nothing",castSize:"2",characters:"A + B",category:"Killer Script",styleRef:"@mytechceo",script:"Complete",environment:"Office / desk setup",status:"Done"},
+  {inspiration:"Better Relationship with Clients",castSize:"2",characters:"A + B",category:"Killer Script",styleRef:"@mytechceo",script:"Complete",environment:"Office / phone call",status:"Done"},
+  {inspiration:"He Talks to the AI More Than Me",castSize:"2",characters:"A + B",category:"Killer Script",styleRef:"@mytechceo",script:"Complete",environment:"Office / desk setup",status:"Done"},
+  {inspiration:"Says What I'm Thinking",castSize:"2",characters:"A + B",category:"Killer Script",styleRef:"@mytechceo",script:"Complete",environment:"Office / laptop",status:"Done"},
+  {inspiration:"The AI Sided with the Client",castSize:"2",characters:"A + B",category:"Killer Script",styleRef:"@mytechceo",script:"Complete",environment:"Office / desk setup",status:"Done"},
+  {inspiration:"We Gave the AI a Budget",castSize:"2",characters:"A + B",category:"Killer Script",styleRef:"@mytechceo",script:"Complete",environment:"Office / desk setup",status:"Done"},
+  {inspiration:"The AI Applied to Our Competitor",castSize:"2",characters:"A + B",category:"Killer Script",styleRef:"@mytechceo",script:"Complete",environment:"Office / laptop screen",status:"Done"},
+  // === 60 VIDEO CONCEPTS: AI AGENT (1-20) ===
+  {inspiration:"The AI Has a Better LinkedIn Than Me",castSize:"2",characters:"A + B",category:"AI Agent",styleRef:"@mytechceo",script:"",environment:"",status:"Idea"},
+  {inspiration:"The AI Left a Glassdoor Review",castSize:"3",characters:"A + B + C",category:"AI Agent",styleRef:"@corporatedudes",script:"",environment:"",status:"Idea"},
+  {inspiration:"We're Replacing the Intern with AI",castSize:"3",characters:"A + B + C",category:"AI Agent",styleRef:"@champagnecruz",script:"",environment:"",status:"Idea"},
+  {inspiration:"The AI Got a Better Performance Review",castSize:"3",characters:"A + B + C",category:"AI Agent",styleRef:"@jordanreviewsittt",script:"",environment:"",status:"Idea"},
+  {inspiration:"The AI Started Delegating Work to Me",castSize:"2",characters:"A + B",category:"AI Agent",styleRef:"@mytechceo",script:"",environment:"",status:"Idea"},
+  {inspiration:"The AI Figured Out We're Overpaying the Accountant",castSize:"3",characters:"A + B + C",category:"AI Agent",styleRef:"@fentifriedchicken",script:"",environment:"",status:"Idea"},
+  {inspiration:"The AI Sends Passive-Aggressive Slack Messages",castSize:"2",characters:"A + B",category:"AI Agent",styleRef:"@corporate.sween",script:"",environment:"",status:"Idea"},
+  {inspiration:"The AI Wrote a Company Culture Doc",castSize:"3",characters:"A + B + C",category:"AI Agent",styleRef:"@corporatenatalie",script:"",environment:"",status:"Idea"},
+  {inspiration:"The AI Interviews Our New Hire",castSize:"3",characters:"A + B + C",category:"AI Agent",styleRef:"@techroastshow",script:"",environment:"",status:"Idea"},
+  {inspiration:"The AI Started a Side Project",castSize:"2",characters:"A + B",category:"AI Agent",styleRef:"@mytechceo",script:"",environment:"",status:"Idea"},
+  {inspiration:"The AI Negotiates Its Own Contract",castSize:"3",characters:"A + B + C",category:"AI Agent",styleRef:"@thatcorporatelawyer",script:"",environment:"",status:"Idea"},
+  {inspiration:"The AI Discovers the Company Credit Card",castSize:"2",characters:"A + B",category:"AI Agent",styleRef:"@austinnasso",script:"",environment:"",status:"Idea"},
+  {inspiration:"We Let the AI Handle Customer Support",castSize:"3",characters:"A + B + C",category:"AI Agent",styleRef:"@corporatedudes",script:"",environment:"",status:"Idea"},
+  {inspiration:"The AI Created an Org Chart",castSize:"2",characters:"A + B",category:"AI Agent",styleRef:"@_businesscasualty",script:"",environment:"",status:"Idea"},
+  {inspiration:"The AI Set Next Quarter's Goals",castSize:"3",characters:"A + B + C",category:"AI Agent",styleRef:"@mengmengduck",script:"",environment:"",status:"Idea"},
+  {inspiration:"The AI Built a Productivity Leaderboard",castSize:"2",characters:"A + B",category:"AI Agent",styleRef:"@champagnecruz",script:"",environment:"",status:"Idea"},
+  {inspiration:"The AI Catches You Lying in a Meeting",castSize:"3",characters:"A + B + C",category:"AI Agent",styleRef:"@mytechceo",script:"",environment:"",status:"Idea"},
+  {inspiration:"The AI Sent a Salary Transparency Report",castSize:"3",characters:"A + B + C",category:"AI Agent",styleRef:"@fentifriedchicken",script:"",environment:"",status:"Idea"},
+  {inspiration:"The AI Won't Stop Quoting Naval",castSize:"2",characters:"A + B",category:"AI Agent",styleRef:"@theprimeagen",script:"",environment:"",status:"Idea"},
+  {inspiration:"The AI Applied to Y Combinator Without Telling Us",castSize:"3",characters:"A + B + C",category:"AI Agent",styleRef:"@lukealexxander",script:"",environment:"",status:"Idea"},
+  // === 60 VIDEO CONCEPTS: CORPORATE (21-40) ===
+  {inspiration:"The Meeting That Should've Been an Email",castSize:"3",characters:"A + B + C",category:"Corporate",styleRef:"@corporatenatalie",script:"",environment:"",status:"Idea"},
+  {inspiration:"POV: Screen Share and Forget Your Tabs",castSize:"2",characters:"A + B",category:"Corporate",styleRef:"@corporatedudes",script:"",environment:"",status:"Idea"},
+  {inspiration:"Let's Take This Offline",castSize:"3",characters:"A + B + C",category:"Corporate",styleRef:"@_businesscasualty",script:"",environment:"",status:"Idea"},
+  {inspiration:"The Company Pizza Party",castSize:"3",characters:"A + B + C",category:"Corporate",styleRef:"@fentifriedchicken",script:"",environment:"",status:"Idea"},
+  {inspiration:"We're a Family Here",castSize:"3",characters:"A + B + C",category:"Corporate",styleRef:"@champagnecruz",script:"",environment:"",status:"Idea"},
+  {inspiration:"The 5-Minute Sync",castSize:"2",characters:"A + B",category:"Corporate",styleRef:"@corporate.sween",script:"",environment:"",status:"Idea"},
+  {inspiration:"The Reply-All Disaster",castSize:"3",characters:"A + B + C",category:"Corporate",styleRef:"@jordanreviewsittt",script:"",environment:"",status:"Idea"},
+  {inspiration:"Everyone Gets 'Meets Expectations'",castSize:"3",characters:"A + B + C",category:"Corporate",styleRef:"@fentifriedchicken",script:"",environment:"",status:"Idea"},
+  {inspiration:"The Unpaid Intern",castSize:"3",characters:"A + B + C",category:"Corporate",styleRef:"@champagnecruz",script:"",environment:"",status:"Idea"},
+  {inspiration:"The LinkedIn Motivation Post",castSize:"2",characters:"A + B",category:"Corporate",styleRef:"@austinnasso",script:"",environment:"",status:"Idea"},
+  {inspiration:"'That's a Great Question'",castSize:"3",characters:"A + B + C",category:"Corporate",styleRef:"@corporatenatalie",script:"",environment:"",status:"Idea"},
+  {inspiration:"Trust Falls Over Zoom",castSize:"3",characters:"A + B + C",category:"Corporate",styleRef:"@corporatedudes",script:"",environment:"",status:"Idea"},
+  {inspiration:"The CEO Read One Business Book",castSize:"3",characters:"A + B + C",category:"Corporate",styleRef:"@mytechceo",script:"",environment:"",status:"Idea"},
+  {inspiration:"'We Need to Talk'",castSize:"2",characters:"A + B",category:"Corporate",styleRef:"@champagnecruz",script:"",environment:"",status:"Idea"},
+  {inspiration:"Corporate Buzzword Bingo",castSize:"3",characters:"A + B + C",category:"Corporate",styleRef:"@_businesscasualty",script:"",environment:"",status:"Idea"},
+  {inspiration:"The Slack Status Lie",castSize:"3",characters:"A + B + C",category:"Corporate",styleRef:"@corporate.sween",script:"",environment:"",status:"Idea"},
+  {inspiration:"The Email Sign-Off Escalation",castSize:"2",characters:"A + B",category:"Corporate",styleRef:"@fentifriedchicken",script:"",environment:"",status:"Idea"},
+  {inspiration:"The 'Quick Favor'",castSize:"2",characters:"A + B",category:"Corporate",styleRef:"@corporatedudes",script:"",environment:"",status:"Idea"},
+  {inspiration:"Working From Home vs. Reality",castSize:"2",characters:"A + B",category:"Corporate",styleRef:"@corporatenatalie",script:"",environment:"",status:"Idea"},
+  {inspiration:"The Office Kitchen War",castSize:"3",characters:"A + B + C",category:"Corporate",styleRef:"@fentifriedchicken",script:"",environment:"",status:"Idea"},
+  // === 60 VIDEO CONCEPTS: TECH/STARTUP (41-60) ===
+  {inspiration:"Disrupting... Water",castSize:"3",characters:"A + B + C",category:"Tech/Startup",styleRef:"@mytechceo",script:"",environment:"",status:"Idea"},
+  {inspiration:"47 Slides for a To-Do App",castSize:"2",characters:"A + B",category:"Tech/Startup",styleRef:"@mengmengduck",script:"",environment:"",status:"Idea"},
+  {inspiration:"Every Founder After Reading One Naval Tweet",castSize:"3",characters:"A + B + C",category:"Tech/Startup",styleRef:"@theprimeagen",script:"",environment:"",status:"Idea"},
+  {inspiration:"LinkedIn Lunatics",castSize:"2",characters:"A + B",category:"Tech/Startup",styleRef:"@austinnasso",script:"",environment:"",status:"Idea"},
+  {inspiration:"'Pre-Revenue'",castSize:"3",characters:"A + B + C",category:"Tech/Startup",styleRef:"@lukealexxander",script:"",environment:"",status:"Idea"},
+  {inspiration:"The Developer Who Automates a 5-Minute Task",castSize:"3",characters:"A + B + C",category:"Tech/Startup",styleRef:"@theprimeagen",script:"",environment:"",status:"Idea"},
+  {inspiration:"The Ping Pong Table Priority",castSize:"3",characters:"A + B + C",category:"Tech/Startup",styleRef:"@corporatedudes",script:"",environment:"",status:"Idea"},
+  {inspiration:"Pivoting the Pivot",castSize:"2",characters:"A + B",category:"Tech/Startup",styleRef:"@mengmengduck",script:"",environment:"",status:"Idea"},
+  {inspiration:"The '18-Hour Day' CEO",castSize:"2",characters:"A + B",category:"Tech/Startup",styleRef:"@fentifriedchicken",script:"",environment:"",status:"Idea"},
+  {inspiration:"'We're Like Uber But For...'",castSize:"3",characters:"A + B + C",category:"Tech/Startup",styleRef:"@mytechceo",script:"",environment:"",status:"Idea"},
+  {inspiration:"The Tech Interview",castSize:"3",characters:"A + B + C",category:"Tech/Startup",styleRef:"@techroastshow",script:"",environment:"",status:"Idea"},
+  {inspiration:"Blockchain in 2026",castSize:"2",characters:"A + B",category:"Tech/Startup",styleRef:"@austinnasso",script:"",environment:"",status:"Idea"},
+  {inspiration:"The Monday Pivot",castSize:"3",characters:"A + B + C",category:"Tech/Startup",styleRef:"@mengmengduck",script:"",environment:"",status:"Idea"},
+  {inspiration:"'The Product Sells Itself'",castSize:"2",characters:"A + B",category:"Tech/Startup",styleRef:"@lukealexxander",script:"",environment:"",status:"Idea"},
+  {inspiration:"'We're an AI Company'",castSize:"3",characters:"A + B + C",category:"Tech/Startup",styleRef:"@mytechceo",script:"",environment:"",status:"Idea"},
+  {inspiration:"The Founder Morning Routine Video",castSize:"2",characters:"A + B",category:"Tech/Startup",styleRef:"@austinnasso",script:"",environment:"",status:"Idea"},
+  {inspiration:"'Just a Button'",castSize:"2",characters:"A + B",category:"Tech/Startup",styleRef:"@theprimeagen",script:"",environment:"",status:"Idea"},
+  {inspiration:"The 'Let's Grab Coffee' Ambush",castSize:"2",characters:"A + B",category:"Tech/Startup",styleRef:"@fentifriedchicken",script:"",environment:"",status:"Idea"},
+  {inspiration:"The Social Media 'Strategy'",castSize:"3",characters:"A + B + C",category:"Tech/Startup",styleRef:"@corporatedudes",script:"",environment:"",status:"Idea"},
+  {inspiration:"The Founder Who Only Speaks in Metrics",castSize:"3",characters:"A + B + C",category:"Tech/Startup",styleRef:"@pm_alec",script:"",environment:"",status:"Idea"},
+];
+
+let data = [...initialData];
+let sortCol = -1;
+let sortAsc = true;
+
+function render() {
+  const tbody = document.getElementById('tableBody');
+  const search = document.getElementById('searchBox').value.toLowerCase();
+  const catF = document.getElementById('catFilter').value;
+  const castF = document.getElementById('castFilter').value;
+
+  let filtered = data.map((row, i) => ({...row, _idx: i}));
+  if (search) filtered = filtered.filter(r => COLS.some(c => (r[c]||'').toLowerCase().includes(search)));
+  if (catF) filtered = filtered.filter(r => r.category === catF);
+  if (castF) filtered = filtered.filter(r => r.castSize === castF);
+
+  tbody.innerHTML = '';
+  filtered.forEach((row, vi) => {
+    const tr = document.createElement('tr');
+    tr.dataset.idx = row._idx;
+
+    const catClass = row.category === 'AI Agent' ? 'cat-ai' :
+                     row.category === 'Corporate' ? 'cat-corporate' :
+                     row.category === 'Tech/Startup' ? 'cat-startup' :
+                     row.category === 'Killer Script' ? 'cat-killer' : '';
+
+    tr.innerHTML = `
+      <td class="row-check"><input type="checkbox" class="row-cb" data-idx="${row._idx}"></td>
+      <td class="row-num">${vi + 1}</td>
+      <td contenteditable="true" data-col="inspiration">${row.inspiration||''}</td>
+      <td contenteditable="true" data-col="castSize" class="cast-size">${row.castSize||''}</td>
+      <td contenteditable="true" data-col="characters">${row.characters||''}</td>
+      <td data-col="category"><span class="category-badge ${catClass}" contenteditable="true">${row.category||''}</span></td>
+      <td contenteditable="true" data-col="styleRef">${row.styleRef||''}</td>
+      <td contenteditable="true" data-col="script">${row.script||''}</td>
+      <td contenteditable="true" data-col="environment">${row.environment||''}</td>
+      <td contenteditable="true" data-col="status">${row.status||''}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // listen for edits
+  tbody.querySelectorAll('[contenteditable="true"]').forEach(cell => {
+    cell.addEventListener('blur', function() {
+      const tr = this.closest('tr');
+      const idx = parseInt(tr.dataset.idx);
+      const col = this.dataset.col;
+      if (col && idx >= 0) {
+        data[idx][col] = this.textContent.trim();
+      }
+    });
+  });
+
+  updateStats(filtered.length);
+}
+
+function updateStats(shown) {
+  const total = data.length;
+  const done = data.filter(r => (r.status||'').toLowerCase() === 'done').length;
+  const scripts = data.filter(r => (r.script||'').toLowerCase() === 'complete').length;
+  document.getElementById('stats').innerHTML =
+    `Total: <span>${total}</span> | Showing: <span>${shown}</span> | Scripts Done: <span>${scripts}</span> | Filmed: <span>${done}</span>`;
+}
+
+function addRow() {
+  data.push({inspiration:'',castSize:'2',characters:'A + B',category:'AI Agent',styleRef:'',script:'',environment:'',status:'Idea'});
+  render();
+  // scroll to bottom
+  const wrap = document.querySelector('.table-wrap');
+  wrap.scrollTop = wrap.scrollHeight;
+}
+
+function deleteSelected() {
+  const cbs = document.querySelectorAll('.row-cb:checked');
+  if (!cbs.length) return;
+  if (!confirm(`Delete ${cbs.length} row(s)?`)) return;
+  const idxs = new Set([...cbs].map(cb => parseInt(cb.dataset.idx)));
+  data = data.filter((_, i) => !idxs.has(i));
+  render();
+}
+
+function toggleSelectAll() {
+  const checked = document.getElementById('selectAll').checked;
+  document.querySelectorAll('.row-cb').forEach(cb => cb.checked = checked);
+}
+
+function filterTable() { render(); }
+
+function sortTable(colIdx) {
+  const colMap = [null,null,'inspiration','castSize','characters','category','styleRef','script','environment','status'];
+  const key = colMap[colIdx];
+  if (!key) return;
+  if (sortCol === colIdx) { sortAsc = !sortAsc; } else { sortCol = colIdx; sortAsc = true; }
+  data.sort((a, b) => {
+    const va = (a[key]||'').toLowerCase();
+    const vb = (b[key]||'').toLowerCase();
+    return sortAsc ? va.localeCompare(vb) : vb.localeCompare(va);
+  });
+  render();
+}
+
+function downloadExcel() {
+  const headers = ['#','Inspiration','Cast Size','Characters','Category','Style Reference','Script','Environment','Status'];
+  const rows = data.map((r, i) => [
+    i + 1,
+    `"${(r.inspiration||'').replace(/"/g,'""')}"`,
+    r.castSize||'',
+    `"${(r.characters||'').replace(/"/g,'""')}"`,
+    `"${(r.category||'').replace(/"/g,'""')}"`,
+    `"${(r.styleRef||'').replace(/"/g,'""')}"`,
+    `"${(r.script||'').replace(/"/g,'""')}"`,
+    `"${(r.environment||'').replace(/"/g,'""')}"`,
+    `"${(r.status||'').replace(/"/g,'""')}"`
+  ]);
+
+  let csv = '\uFEFF' + headers.join(',') + '\n' + rows.map(r => r.join(',')).join('\n');
+  const blob = new Blob([csv], {type: 'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'skit-planner.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function saveLocal() {
+  localStorage.setItem('skitPlannerData', JSON.stringify(data));
+  alert('Saved to browser!');
+}
+
+function loadLocal() {
+  const saved = localStorage.getItem('skitPlannerData');
+  if (saved) {
+    data = JSON.parse(saved);
+    render();
+    alert('Loaded!');
+  } else {
+    alert('No saved data found.');
+  }
+}
+
+// Init
+render();
+</script>
+</body>
+</html>
