@@ -29,6 +29,7 @@ export interface Inspo {
 export interface Skit {
   id: string;
   inspiration: string;
+  links: string;
   castSize: string;
   characters: string;
   category: string;
@@ -36,6 +37,9 @@ export interface Skit {
   script: string;
   environment: string;
   status: string;
+  approved?: boolean | null;
+  isPublic?: boolean;
+  sort_order?: number;
 }
 
 const isBrowser = typeof window !== "undefined";
@@ -161,11 +165,37 @@ export function setInspos(inspos: Inspo[]): void {
   setStore("inspos", inspos);
 }
 
+export interface Influencer {
+  id: string;
+  name: string;
+  handle: string;
+  avatar: string;
+  platforms: { platform: string; url: string }[];
+  tags: string[];
+  favorite: boolean;
+  guideContent: string;
+}
+
+export function getInfluencers(): Influencer[] {
+  return getStore<Influencer[]>("influencers", []);
+}
+export function setInfluencers(influencers: Influencer[]): void {
+  setStore("influencers", influencers);
+}
+
 export function getSkits(): Skit[] {
   return getStore<Skit[]>("skits", []);
 }
 export function setSkits(skits: Skit[]): void {
   setStore("skits", skits);
+}
+
+const DEFAULT_CATEGORIES = ["Killer Script", "AI Agent", "Corporate", "Tech/Startup"];
+export function getCategories(): string[] {
+  return getStore<string[]>("categories", DEFAULT_CATEGORIES);
+}
+export function setCategories(cats: string[]): void {
+  setStore("categories", cats);
 }
 
 export function exportAllData(): string {

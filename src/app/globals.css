@@ -1,13 +1,156 @@
 @import "tailwindcss";
 
+/* ═══════════════════════════════════════════════
+   DARK MODE VARIANT
+   ═══════════════════════════════════════════════ */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* ═══════════════════════════════════════════════
+   THEME TOKENS (Tailwind v4)
+   ═══════════════════════════════════════════════ */
 @theme inline {
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  --color-foreground: var(--tk-foreground);
+  --color-text2: var(--tk-text-secondary);
+  --color-text3: var(--tk-text-tertiary);
+  --color-surface: var(--tk-surface-solid);
+  --color-border: var(--tk-border);
+  --color-border-strong: var(--tk-border-strong);
+  --color-accent: var(--tk-accent);
+  --color-accent-hover: var(--tk-accent-hover);
+  --color-input-bg: var(--tk-input-bg);
+  --color-hover-row: var(--tk-hover-row);
+  --color-page-bg: var(--tk-page-bg);
+
+  --color-t-rose: var(--tk-rose);
+  --color-t-green: var(--tk-green);
+  --color-t-blue: var(--tk-blue);
+  --color-t-amber: var(--tk-amber);
+  --color-t-purple: var(--tk-purple);
+  --color-t-orange: var(--tk-orange);
+  --color-t-sky: var(--tk-sky);
+  --color-t-pink: var(--tk-pink);
+  --color-t-red: var(--tk-red);
 }
 
-* {
-  box-sizing: border-box;
+/* ═══════════════════════════════════════════════
+   LIGHT MODE (default)
+   ═══════════════════════════════════════════════ */
+:root {
+  --tk-page-bg: #f0f2f7;
+  --tk-surface-solid: #ffffff;
+  --tk-foreground: #1a1a2e;
+  --tk-text-secondary: #64748b;
+  --tk-text-tertiary: #94a3b8;
+  --tk-accent: #6366f1;
+  --tk-accent-hover: #4f46e5;
+  --tk-accent-glow: rgba(99, 102, 241, 0.25);
+  --tk-accent-transparent: rgba(99, 102, 241, 0.12);
+  --tk-border: rgba(148, 163, 184, 0.25);
+  --tk-border-strong: rgba(148, 163, 184, 0.40);
+  --tk-input-bg: rgba(241, 245, 249, 0.60);
+  --tk-hover-row: rgba(99, 102, 241, 0.06);
+  --tk-scrollbar: rgba(148, 163, 184, 0.35);
+  --tk-scrollbar-hover: rgba(148, 163, 184, 0.55);
+
+  /* Semantic */
+  --tk-rose: #f43f5e;
+  --tk-green: #22c55e;
+  --tk-blue: #3b82f6;
+  --tk-amber: #f59e0b;
+  --tk-purple: #a855f7;
+  --tk-orange: #f97316;
+  --tk-sky: #0ea5e9;
+  --tk-pink: #ec4899;
+  --tk-red: #ef4444;
+
+  /* Glass */
+  --glass-subtle-bg: rgba(255, 255, 255, 0.35);
+  --glass-medium-bg: rgba(255, 255, 255, 0.55);
+  --glass-strong-bg: rgba(255, 255, 255, 0.72);
+  --glass-border: rgba(255, 255, 255, 0.45);
+  --glass-border-strong: rgba(255, 255, 255, 0.60);
+  --glass-shadow: 0 8px 32px rgba(31, 38, 135, 0.08);
+  --glass-shadow-lg: 0 16px 48px rgba(31, 38, 135, 0.12);
+  --glass-shadow-accent: 0 8px 32px rgba(99, 102, 241, 0.15);
+
+  /* Mesh gradient */
+  --mesh-1: rgba(219, 234, 254, 0.6);
+  --mesh-2: rgba(224, 231, 255, 0.5);
+  --mesh-3: rgba(250, 232, 255, 0.4);
+  --mesh-4: rgba(240, 253, 244, 0.35);
+
+  /* Noise opacity */
+  --noise-opacity: 0.025;
+
+  /* Orb opacity */
+  --orb-indigo: rgba(99, 102, 241, 0.15);
+  --orb-purple: rgba(168, 85, 247, 0.12);
+  --orb-blue: rgba(59, 130, 246, 0.10);
 }
+
+/* ═══════════════════════════════════════════════
+   DARK MODE
+   ═══════════════════════════════════════════════ */
+.dark {
+  --tk-page-bg: #0b0b14;
+  --tk-surface-solid: #12121f;
+  --tk-foreground: #e8e8f0;
+  --tk-text-secondary: #8b8fa8;
+  --tk-text-tertiary: #5c5f78;
+  --tk-accent: #818cf8;
+  --tk-accent-hover: #6366f1;
+  --tk-accent-glow: rgba(129, 140, 248, 0.20);
+  --tk-accent-transparent: rgba(129, 140, 248, 0.15);
+  --tk-border: rgba(255, 255, 255, 0.07);
+  --tk-border-strong: rgba(255, 255, 255, 0.12);
+  --tk-input-bg: rgba(255, 255, 255, 0.05);
+  --tk-hover-row: rgba(129, 140, 248, 0.08);
+  --tk-scrollbar: rgba(255, 255, 255, 0.12);
+  --tk-scrollbar-hover: rgba(255, 255, 255, 0.22);
+
+  /* Semantic (brighter for dark bg) */
+  --tk-rose: #fb7185;
+  --tk-green: #4ade80;
+  --tk-blue: #60a5fa;
+  --tk-amber: #fbbf24;
+  --tk-purple: #c084fc;
+  --tk-orange: #fb923c;
+  --tk-sky: #38bdf8;
+  --tk-pink: #f472b6;
+  --tk-red: #f87171;
+
+  /* Glass */
+  --glass-subtle-bg: rgba(255, 255, 255, 0.04);
+  --glass-medium-bg: rgba(255, 255, 255, 0.07);
+  --glass-strong-bg: rgba(255, 255, 255, 0.10);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-border-strong: rgba(255, 255, 255, 0.14);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.35);
+  --glass-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.45);
+  --glass-shadow-accent: 0 8px 32px rgba(129, 140, 248, 0.12);
+
+  /* Mesh gradient (dark tints) */
+  --mesh-1: rgba(30, 27, 75, 0.6);
+  --mesh-2: rgba(23, 37, 84, 0.5);
+  --mesh-3: rgba(59, 7, 100, 0.4);
+  --mesh-4: rgba(5, 46, 22, 0.35);
+
+  --noise-opacity: 0.04;
+
+  --orb-indigo: rgba(99, 102, 241, 0.20);
+  --orb-purple: rgba(168, 85, 247, 0.15);
+  --orb-blue: rgba(59, 130, 246, 0.12);
+}
+
+/* ═══════════════════════════════════════════════
+   BASE STYLES
+   ═══════════════════════════════════════════════ */
+* { box-sizing: border-box; }
+
+button, [role="button"], a, select, label[for], summary { cursor: pointer; }
 
 body {
   font-family: var(--font-sans, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
@@ -15,12 +158,178 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Smooth scrollbar */
+/* Scrollbar */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+::-webkit-scrollbar-thumb { background: var(--tk-scrollbar); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--tk-scrollbar-hover); }
 
-/* Table reset — Tailwind classes handle styling */
+/* Table reset */
 table { border-collapse: collapse; width: 100%; }
 th, td { text-align: left; vertical-align: middle; }
+
+/* ═══════════════════════════════════════════════
+   GLASS UTILITIES
+   ═══════════════════════════════════════════════ */
+.glass-subtle {
+  background: var(--glass-subtle-bg);
+  backdrop-filter: blur(8px) saturate(120%);
+  -webkit-backdrop-filter: blur(8px) saturate(120%);
+  border: 1px solid var(--glass-border);
+}
+
+.glass-medium {
+  background: var(--glass-medium-bg);
+  backdrop-filter: blur(16px) saturate(150%);
+  -webkit-backdrop-filter: blur(16px) saturate(150%);
+  border: 1px solid var(--glass-border-strong);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-strong {
+  background: var(--glass-strong-bg);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--glass-border-strong);
+  box-shadow: var(--glass-shadow-lg), inset 0 1px 0 0 rgba(255,255,255,0.05);
+}
+
+/* Fallback */
+@supports not (backdrop-filter: blur(1px)) {
+  .glass-subtle { background: var(--tk-surface-solid); opacity: 0.92; }
+  .glass-medium { background: var(--tk-surface-solid); opacity: 0.95; }
+  .glass-strong { background: var(--tk-surface-solid); opacity: 0.97; }
+}
+
+/* Custom checkbox */
+.fancy-check {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  border: 1.5px solid var(--glass-border-strong);
+  background: var(--glass-subtle-bg);
+  cursor: pointer;
+  position: relative;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+.fancy-check:hover {
+  border-color: var(--tk-accent);
+  background: var(--tk-accent-transparent);
+}
+.fancy-check:checked {
+  background: var(--tk-accent);
+  border-color: var(--tk-accent);
+}
+.fancy-check:checked::after {
+  content: '';
+  position: absolute;
+  left: 4.5px;
+  top: 1.5px;
+  width: 5px;
+  height: 9px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.fancy-check:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--tk-accent-transparent);
+}
+
+/* Portal dropdown — solid opaque bg, no backdrop-filter */
+.dropdown-menu {
+  background: var(--tk-surface-solid);
+  border: 1px solid var(--glass-border-strong);
+  box-shadow: var(--glass-shadow-lg), inset 0 1px 0 0 rgba(255,255,255,0.04);
+}
+
+/* ═══════════════════════════════════════════════
+   MESH BACKGROUND
+   ═══════════════════════════════════════════════ */
+.bg-mesh {
+  background-color: var(--tk-page-bg);
+  background-image:
+    radial-gradient(ellipse at 15% 20%, var(--mesh-1) 0%, transparent 50%),
+    radial-gradient(ellipse at 85% 25%, var(--mesh-2) 0%, transparent 45%),
+    radial-gradient(ellipse at 50% 80%, var(--mesh-3) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 70%, var(--mesh-4) 0%, transparent 40%);
+  background-attachment: fixed;
+}
+
+/* Noise overlay */
+.bg-mesh::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: var(--noise-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 200px 200px;
+}
+
+/* ═══════════════════════════════════════════════
+   FLOATING ORBS
+   ═══════════════════════════════════════════════ */
+.bg-orb {
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+  animation: float 20s ease-in-out infinite;
+}
+.bg-orb-1 {
+  width: 400px; height: 400px;
+  background: var(--orb-indigo);
+  top: 10%; left: 10%;
+}
+.bg-orb-2 {
+  width: 350px; height: 350px;
+  background: var(--orb-purple);
+  top: 60%; right: 10%;
+  animation-delay: -7s;
+}
+.bg-orb-3 {
+  width: 300px; height: 300px;
+  background: var(--orb-blue);
+  bottom: 10%; left: 40%;
+  animation-delay: -14s;
+}
+
+/* ═══════════════════════════════════════════════
+   ANIMATIONS
+   ═══════════════════════════════════════════════ */
+@keyframes float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(30px, -20px) scale(1.05); }
+  66% { transform: translate(-20px, 15px) scale(0.95); }
+}
+
+@keyframes slide-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-slide-up { animation: slide-up 0.25s ease-out; }
+
+@keyframes fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fade-in { animation: fade-in 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+
+@keyframes editor-in {
+  from { opacity: 0; transform: translateY(24px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-editor-in { animation: editor-in 0.2s ease-out; }
+
+/* ═══════════════════════════════════════════════
+   SCROLLBAR HIDE UTILITY
+   ═══════════════════════════════════════════════ */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
