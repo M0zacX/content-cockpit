@@ -1390,6 +1390,8 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
   /* ─── State ─── */
   const [search, setSearch] = useState("");
   const [searchField, setSearchField] = useState<"all" | keyof Skit>("all");
+  const [searchFieldOpen, setSearchFieldOpen] = useState(false);
+  const searchFieldRef = useRef<HTMLDivElement>(null);
   const [filterCat, setFilterCat] = useState("All");
   const [filterStatus, setFilterStatus] = useState("All");
   const [statusDropdownOpen, setStatusDropdownOpen] = useState(false);
@@ -1671,6 +1673,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (catDropdownRef.current && !catDropdownRef.current.contains(e.target as Node)) setCatDropdownOpen(false);
+      if (searchFieldRef.current && !searchFieldRef.current.contains(e.target as Node)) setSearchFieldOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -3056,19 +3059,28 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
 
           {/* Desktop search */}
           <div className="hidden lg:flex items-center gap-1 flex-1 min-w-0">
-            <select
-              value={searchField}
-              onChange={e => { setSearchField(e.target.value as "all" | keyof Skit); setPage(0); }}
-              className="shrink-0 h-[38px] px-2 pr-6 py-2 bg-input-bg border border-border rounded-xl text-xs font-medium text-text2 focus:outline-none focus:ring-2 focus:ring-accent/25 focus:border-accent/50 transition cursor-pointer appearance-none"
-              style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M19 9l-7 7-7-7'/%3E%3C/svg%3E\")", backgroundRepeat: "no-repeat", backgroundPosition: "right 6px center" }}
-            >
-              <option value="all">All Fields</option>
-              <option value="inspiration">Title</option>
-              <option value="script">Script</option>
-              <option value="styleRef">Style Ref</option>
-              <option value="environment">Environment</option>
-              <option value="category">Category</option>
-            </select>
+            <div ref={searchFieldRef} className="relative shrink-0">
+              <button
+                onClick={() => setSearchFieldOpen(o => !o)}
+                className="h-[38px] px-3 pr-7 py-2 bg-input-bg border border-border rounded-xl text-xs font-medium text-text2 hover:border-border-strong focus:outline-none focus:ring-2 focus:ring-accent/25 focus:border-accent/50 transition cursor-pointer"
+              >
+                {({ all: "All Fields", inspiration: "Title", script: "Script", styleRef: "Style Ref", environment: "Environment", category: "Category" } as Record<string, string>)[searchField] ?? "All Fields"}
+                <svg className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-text3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 9l-7 7-7-7"/></svg>
+              </button>
+              {searchFieldOpen && (
+                <div className="absolute left-0 top-full mt-1 min-w-[140px] bg-card border border-border rounded-xl shadow-xl py-1 z-50">
+                  {([["all", "All Fields"], ["inspiration", "Title"], ["script", "Script"], ["styleRef", "Style Ref"], ["environment", "Environment"], ["category", "Category"]] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => { setSearchField(val as "all" | keyof Skit); setPage(0); setSearchFieldOpen(false); }}
+                      className={`w-full text-left px-3 py-1.5 text-xs transition ${searchField === val ? "bg-accent/15 text-accent font-semibold" : "text-text2 hover:bg-hover-row"}`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="relative flex-1 min-w-0">
               <div className="absolute left-3 top-1/2 -translate-y-1/2"><SearchIcon /></div>
               <input
