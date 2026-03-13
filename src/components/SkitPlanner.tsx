@@ -3068,7 +3068,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
                 <svg className="absolute right-2 top-1/2 -translate-y-1/2 w-3 h-3 text-text3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 9l-7 7-7-7"/></svg>
               </button>
               {searchFieldOpen && (
-                <div className="absolute left-0 top-full mt-1 min-w-[140px] bg-card border border-border rounded-xl shadow-xl py-1 z-50">
+                <div className="dropdown-menu absolute left-0 top-full mt-1 min-w-[140px] rounded-xl py-1 z-50">
                   {([["all", "All Fields"], ["inspiration", "Title"], ["script", "Script"], ["styleRef", "Style Ref"], ["environment", "Environment"], ["category", "Category"]] as const).map(([val, label]) => (
                     <button
                       key={val}
