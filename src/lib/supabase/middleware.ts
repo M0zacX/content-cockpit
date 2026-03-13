@@ -32,18 +32,28 @@ export async function updateSession(request: NextRequest) {
   const path = request.nextUrl.pathname;
   const isAuthPage = path === "/login" || path === "/signup";
 
+  // Helper: build a redirect that preserves any cookies Supabase set
+  // (e.g. refreshed tokens). Without this, token refreshes during
+  // redirects are lost and can cause infinite redirect loops.
+  function redirectWithCookies(pathname: string) {
+    const url = request.nextUrl.clone();
+    url.pathname = pathname;
+    url.search = "";          // drop stale query params like ?redirect=
+    const res = NextResponse.redirect(url);
+    supabaseResponse.cookies.getAll().forEach(c =>
+      res.cookies.set(c.name, c.value)
+    );
+    return res;
+  }
+
   // Not logged in and trying to access protected route
   if (!user && !isAuthPage && !path.startsWith("/api/") && !path.startsWith("/board/") && !path.startsWith("/script/")) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/login";
-    return NextResponse.redirect(url);
+    return redirectWithCookies("/login");
   }
 
   // Logged in and trying to access auth pages
   if (user && isAuthPage) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/";
-    return NextResponse.redirect(url);
+    return redirectWithCookies("/");
   }
 
   return supabaseResponse;
