@@ -109,6 +109,11 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     containerRef.current?.focus();
+    // When an iframe steals focus, window blurs — refocus our container
+    // so arrow keys and Escape keep working after video playback starts.
+    const refocus = () => setTimeout(() => containerRef.current?.focus(), 0);
+    window.addEventListener("blur", refocus);
+    return () => window.removeEventListener("blur", refocus);
   }, []);
 
   /* ─── Keyboard navigation ─── */
