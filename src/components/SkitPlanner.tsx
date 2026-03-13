@@ -813,6 +813,29 @@ function parseLinksField(val: string): { url: string; platform: string }[] {
   return val.split(/[\n\s]+/).filter(t => /^https?:\/\//i.test(t)).map(url => ({ url, platform: detectPlatform(url) }));
 }
 
+/* ─── Import dedup helpers ─── */
+function getExistingUrls(skits: Skit[]): Set<string> {
+  const urls = new Set<string>();
+  for (const s of skits) {
+    for (const { url } of parseLinksField(s.links)) {
+      urls.add(url.toLowerCase().replace(/\/$/, ""));
+    }
+  }
+  return urls;
+}
+
+function dedupeNewSkits(newSkits: Skit[], existingUrls: Set<string>): { unique: Skit[]; dupes: number } {
+  const unique: Skit[] = [];
+  let dupes = 0;
+  for (const s of newSkits) {
+    const urls = parseLinksField(s.links);
+    const isDupe = urls.length > 0 && urls.every(u => existingUrls.has(u.url.toLowerCase().replace(/\/$/, "")));
+    if (isDupe) dupes++;
+    else unique.push(s);
+  }
+  return { unique, dupes };
+}
+
 /* ─── Reel research markdown parser ─── */
 interface ParsedReelCreator {
   handle: string;
@@ -1788,10 +1811,16 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
           showToast("No valid rows found in CSV");
           return;
         }
+        const { unique, dupes } = dedupeNewSkits(newSkits, getExistingUrls(skits));
+        if (unique.length === 0) {
+          showToast(`All ${newSkits.length} row${newSkits.length > 1 ? "s" : ""} already exist on this board`);
+          return;
+        }
         const snapshot = [...skits];
-        persist([...skits, ...newSkits]);
+        persist([...skits, ...unique]);
         setUndoSnapshot(snapshot);
-        showToast(`Imported ${newSkits.length} row${newSkits.length > 1 ? "s" : ""}`, () => {
+        const dupeMsg = dupes > 0 ? ` (${dupes} duplicate${dupes > 1 ? "s" : ""} skipped)` : "";
+        showToast(`Imported ${unique.length} row${unique.length > 1 ? "s" : ""}${dupeMsg}`, () => {
           persist(snapshot);
           setUndoSnapshot(null);
         });
@@ -1819,10 +1848,18 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
         });
       }
     }
+    const { unique, dupes } = dedupeNewSkits(newSkits, getExistingUrls(skits));
+    if (unique.length === 0) {
+      showToast(`All ${newSkits.length} reel${newSkits.length > 1 ? "s" : ""} already exist on this board`);
+      setReelImportOpen(false);
+      setReelImportData(null);
+      return;
+    }
     const snapshot = [...skits];
-    persist([...newSkits, ...skits]);
+    persist([...unique, ...skits]);
     setUndoSnapshot(snapshot);
-    showToast(`Imported ${newSkits.length} reel${newSkits.length > 1 ? "s" : ""} from ${reelImportData.length} creator${reelImportData.length > 1 ? "s" : ""}`, () => {
+    const dupeMsg = dupes > 0 ? ` (${dupes} duplicate${dupes > 1 ? "s" : ""} skipped)` : "";
+    showToast(`Imported ${unique.length} reel${unique.length > 1 ? "s" : ""} from ${reelImportData.length} creator${reelImportData.length > 1 ? "s" : ""}${dupeMsg}`, () => {
       persist(snapshot);
       setUndoSnapshot(null);
     });
@@ -1939,10 +1976,17 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
 
   const confirmSmartImport = useCallback(() => {
     if (!smartImportPreview) return;
+    const { unique, dupes } = dedupeNewSkits(smartImportPreview, getExistingUrls(skits));
+    if (unique.length === 0) {
+      showToast(`All ${smartImportPreview.length} row${smartImportPreview.length > 1 ? "s" : ""} already exist on this board`);
+      resetSmartImport();
+      return;
+    }
     const snapshot = [...skits];
-    persist([...skits, ...smartImportPreview]);
+    persist([...skits, ...unique]);
     setUndoSnapshot(snapshot);
-    showToast(`Imported ${smartImportPreview.length} row${smartImportPreview.length > 1 ? "s" : ""} via AI`, () => {
+    const dupeMsg = dupes > 0 ? ` (${dupes} duplicate${dupes > 1 ? "s" : ""} skipped)` : "";
+    showToast(`Imported ${unique.length} row${unique.length > 1 ? "s" : ""} via AI${dupeMsg}`, () => {
       persist(snapshot);
       setUndoSnapshot(null);
     });
