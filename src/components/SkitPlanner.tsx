@@ -1728,8 +1728,8 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
 
   /* ─── Add row ─── */
   const addRow = useCallback(() => {
-    const newSkit: Skit = { id: crypto.randomUUID(), inspiration: "", links: "", castSize: "2", characters: "A + B", category: "AI Agent", styleRef: "", script: "", environment: "", status: "Idea", approved: null };
-    persist([newSkit, ...skits]);
+    const newSkit: Skit = { id: crypto.randomUUID(), inspiration: "", links: "", castSize: "2", characters: "A + B", category: "AI Agent", styleRef: "", script: "", environment: "", status: "Idea", approved: null, sort_order: 0 };
+    persist([newSkit, ...skits].map((s, i) => ({ ...s, sort_order: i })));
     setNewRowId(newSkit.id);
     setPage(0);
     setTimeout(() => setActiveCell([0, 0]), 50);
@@ -1820,7 +1820,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
           return;
         }
         const snapshot = [...skits];
-        persist([...skits, ...unique]);
+        persist([...skits, ...unique].map((s, i) => ({ ...s, sort_order: i })));
         setUndoSnapshot(snapshot);
         const dupeMsg = dupes > 0 ? ` (${dupes} duplicate${dupes > 1 ? "s" : ""} skipped)` : "";
         showToast(`Imported ${unique.length} row${unique.length > 1 ? "s" : ""}${dupeMsg}`, () => {
@@ -1859,7 +1859,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
       return;
     }
     const snapshot = [...skits];
-    persist([...unique, ...skits]);
+    persist([...unique, ...skits].map((s, i) => ({ ...s, sort_order: i })));
     setUndoSnapshot(snapshot);
     const dupeMsg = dupes > 0 ? ` (${dupes} duplicate${dupes > 1 ? "s" : ""} skipped)` : "";
     showToast(`Imported ${unique.length} reel${unique.length > 1 ? "s" : ""} from ${reelImportData.length} creator${reelImportData.length > 1 ? "s" : ""}${dupeMsg}`, () => {
@@ -1986,7 +1986,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
       return;
     }
     const snapshot = [...skits];
-    persist([...skits, ...unique]);
+    persist([...skits, ...unique].map((s, i) => ({ ...s, sort_order: i })));
     setUndoSnapshot(snapshot);
     const dupeMsg = dupes > 0 ? ` (${dupes} duplicate${dupes > 1 ? "s" : ""} skipped)` : "";
     showToast(`Imported ${unique.length} row${unique.length > 1 ? "s" : ""} via AI${dupeMsg}`, () => {
