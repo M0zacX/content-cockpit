@@ -126,14 +126,29 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
     if (tag === "INPUT" && type === "text") return;
     if (tag === "TEXTAREA") return;
 
-    if (e.key === "ArrowRight") {
+    const key = e.key.toLowerCase();
+
+    // Navigate: ArrowRight / D = next, ArrowLeft / A = prev
+    if (e.key === "ArrowRight" || key === "d") {
       e.preventDefault();
       setIdx(i => Math.min(i + 1, videos.length - 1));
-    } else if (e.key === "ArrowLeft") {
+    } else if (e.key === "ArrowLeft" || key === "a") {
       e.preventDefault();
       setIdx(i => Math.max(i - 1, 0));
     }
-  }, [onClose, videos.length]);
+    // Approve + advance: ArrowUp / W
+    else if (e.key === "ArrowUp" || key === "w") {
+      e.preventDefault();
+      onUpdateSkit(videos[idx]?.skitId ?? "", "approved", true);
+      setIdx(i => Math.min(i + 1, videos.length - 1));
+    }
+    // Reject + advance: ArrowDown / S
+    else if (e.key === "ArrowDown" || key === "s") {
+      e.preventDefault();
+      onUpdateSkit(videos[idx]?.skitId ?? "", "approved", false);
+      setIdx(i => Math.min(i + 1, videos.length - 1));
+    }
+  }, [onClose, videos, idx, onUpdateSkit]);
 
   // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
@@ -340,10 +355,14 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
             <PlatformIcon platform={video.platform} size={14} />
             <a href={video.url} target="_blank" rel="noopener noreferrer" className="truncate max-w-[280px] hover:text-accent transition">{video.url}</a>
           </div>
-          <div className="flex items-center gap-1 text-[11px] text-text3/50 shrink-0">
-            <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">&larr;</kbd>
-            <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">&rarr;</kbd>
+          <div className="flex items-center gap-1 text-[11px] text-text3/50 shrink-0 flex-wrap justify-end">
+            <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">A</kbd>
+            <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">D</kbd>
             <span className="ml-0.5">nav</span>
+            <kbd className="ml-1.5 px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">W</kbd>
+            <span className="ml-0.5 text-t-green/60">approve</span>
+            <kbd className="ml-1.5 px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">S</kbd>
+            <span className="ml-0.5 text-t-rose/60">reject</span>
             <kbd className="ml-1.5 px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">esc</kbd>
             <span className="ml-0.5">close</span>
           </div>
