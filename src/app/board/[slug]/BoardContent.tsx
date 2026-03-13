@@ -178,7 +178,7 @@ export default function BoardContent({ slug }: { slug: string }) {
           boardId={board!.id}
           boardName={board!.name}
           readOnly={!canEdit}
-          otherBoards={[...ownedBoards, ...sharedBoards].filter(b => b.id !== board!.id).map(b => ({ id: b.id, name: b.name }))}
+          otherBoards={ownedBoards.filter(b => b.id !== board!.id).map(b => ({ id: b.id, name: b.name }))}
         />
       </div>
     </div>

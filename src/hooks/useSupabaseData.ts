@@ -326,7 +326,7 @@ export function useSupabaseData(boardId: string | null) {
         if (boardId) updateCache(boardId, { skits: next });
         return next;
       });
-      const { error } = await supabase.from("skits").update({ board_id: targetBoardId }).in("id", ids);
+      const { error } = await supabase.from("skits").update({ board_id: targetBoardId, user_id: user.id }).in("id", ids);
       if (error) console.error("Move skit error:", error.message);
     },
     [user, supabase, boardId]
