@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 
 /* ═══════════════════════════════════════════════════
@@ -15,6 +15,9 @@ export interface VideoEntry {
   approved: boolean | null;
   castSize: string;
   status: string;
+  category: string;
+  styleRef: string;
+  environment: string;
 }
 
 interface VideoPreviewProps {
@@ -22,6 +25,8 @@ interface VideoPreviewProps {
   startIndex: number;
   onClose: () => void;
   onUpdateSkit: (id: string, field: string, value: string | boolean | null) => void;
+  onDeleteSkit: (id: string) => void;
+  categories: string[];
   readOnly?: boolean;
 }
 
@@ -95,24 +100,87 @@ function PlatformIcon({ platform, size = 16 }: { platform: string; size?: number
 }
 
 /* ═══════════════════════════════════════════════════
+   MINI DROPDOWN (inline, for category/status)
+   ═══════════════════════════════════════════════════ */
+
+function MiniDropdown({ value, options, onChange, label }: {
+  value: string;
+  options: { value: string; label: string; icon?: string }[];
+  onChange: (v: string) => void;
+  label: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [open]);
+
+  const selected = options.find(o => o.value === value);
+
+  return (
+    <div ref={ref} className="relative">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-input-bg border border-border hover:border-border-strong transition max-w-[120px]"
+        title={label}
+      >
+        {selected?.icon && <span>{selected.icon}</span>}
+        <span className="truncate">{selected?.label || value || label}</span>
+        <svg className="w-3 h-3 opacity-40 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M19 9l-7 7-7-7"/></svg>
+      </button>
+      {open && (
+        <div className="absolute left-0 bottom-full mb-1 min-w-[140px] max-h-[200px] overflow-y-auto dropdown-menu rounded-xl py-1 z-[10001]">
+          {options.map(o => (
+            <button
+              key={o.value}
+              onClick={() => { onChange(o.value); setOpen(false); }}
+              className={`w-full text-left px-3 py-1.5 text-xs transition flex items-center gap-2 ${value === o.value ? "bg-accent/15 text-accent font-semibold" : "text-text2 hover:bg-hover-row"}`}
+            >
+              {o.icon && <span>{o.icon}</span>} {o.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
    COMPONENT
    ═══════════════════════════════════════════════════ */
 
-export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit, readOnly }: VideoPreviewProps) {
+export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit, onDeleteSkit, categories, readOnly }: VideoPreviewProps) {
   const [idx, setIdx] = useState(startIndex);
-  const [statusOpen, setStatusOpen] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const video = videos[idx];
   if (!video) return null;
 
   const embedUrl = getEmbedUrl(video.url, video.platform);
+  const statusStyle = STATUS_STYLES[video.status] || STATUS_STYLES["Idea"];
+
+  /* ─── Focus container on mount so keys work ─── */
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  useEffect(() => {
+    containerRef.current?.focus();
+  }, []);
 
   /* ─── Keyboard navigation ─── */
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   const handleKey = useCallback((e: KeyboardEvent) => {
     if (e.key === "Escape") { onClose(); return; }
 
-    // Don't capture arrows when typing in cast input
-    if ((e.target as HTMLElement)?.tagName === "INPUT") return;
+    // Skip arrow keys only when focused on text inputs (not number inputs)
+    const tag = (e.target as HTMLElement)?.tagName;
+    const type = (e.target as HTMLInputElement)?.type;
+    if (tag === "INPUT" && type === "text") return;
+    if (tag === "TEXTAREA") return;
 
     if (e.key === "ArrowRight") {
       e.preventDefault();
@@ -123,149 +191,170 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
     }
   }, [onClose, videos.length]);
 
+  // eslint-disable-next-line react-hooks/rules-of-hooks
   useEffect(() => {
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
   }, [handleKey]);
 
-  /* ─── Approval toggle ─── */
-  const toggleApprove = () => {
+  /* ─── Actions ─── */
+  const update = (field: string, value: string | boolean | null) => {
     if (readOnly) return;
-    onUpdateSkit(video.skitId, "approved", video.approved === true ? null : true);
-  };
-  const toggleReject = () => {
-    if (readOnly) return;
-    onUpdateSkit(video.skitId, "approved", video.approved === false ? null : false);
+    onUpdateSkit(video.skitId, field, value);
   };
 
-  /* ─── Status change ─── */
-  const changeStatus = (s: string) => {
+  const handleDelete = () => {
     if (readOnly) return;
-    onUpdateSkit(video.skitId, "status", s);
-    setStatusOpen(false);
+    const nextIdx = idx < videos.length - 1 ? idx : idx - 1;
+    onDeleteSkit(video.skitId);
+    if (videos.length <= 1) { onClose(); return; }
+    setIdx(Math.max(0, nextIdx));
   };
 
-  /* ─── Cast size change ─── */
-  const changeCast = (val: string) => {
-    if (readOnly) return;
-    onUpdateSkit(video.skitId, "castSize", val);
-  };
-
-  const statusStyle = STATUS_STYLES[video.status] || STATUS_STYLES["Idea"];
+  const statusOptions = STATUSES.map(s => ({ value: s, label: s, icon: STATUS_STYLES[s]?.icon }));
+  const categoryOptions = categories.map(c => ({ value: c, label: c }));
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center"
+      ref={containerRef}
+      tabIndex={-1}
+      className="fixed inset-0 z-[9999] flex items-center justify-center outline-none"
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
 
       {/* Modal */}
-      <div className="relative z-10 w-full max-w-3xl mx-4 flex flex-col max-h-[90vh]">
+      <div className="relative z-10 w-full max-w-3xl mx-4 flex flex-col max-h-[92vh]">
 
-        {/* ─── Top bar ─── */}
-        <div className="flex items-center gap-3 px-4 py-3 bg-surface/90 backdrop-blur border border-border rounded-t-2xl">
-          {/* Title & counter */}
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-foreground truncate">{video.skitTitle || "Untitled"}</p>
-            <p className="text-xs text-text3">Video {idx + 1} of {videos.length}</p>
-          </div>
-
-          {/* Quick actions */}
-          {!readOnly && (
-            <div className="flex items-center gap-2">
-              {/* Approval */}
-              <div className="flex items-center gap-0.5">
-                <button
-                  onClick={toggleApprove}
-                  className={`p-1.5 rounded-lg transition-all ${video.approved === true ? "text-t-green bg-t-green/15" : "text-text3/40 hover:text-t-green hover:bg-t-green/10"}`}
-                  title="Approve"
-                >
-                  <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
-                </button>
-                <button
-                  onClick={toggleReject}
-                  className={`p-1.5 rounded-lg transition-all ${video.approved === false ? "text-t-rose bg-t-rose/15" : "text-text3/40 hover:text-t-rose hover:bg-t-rose/10"}`}
-                  title="Reject"
-                >
-                  <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
-                </button>
-              </div>
-
-              {/* Divider */}
-              <div className="w-px h-6 bg-border" />
-
-              {/* Cast size */}
-              <div className="flex items-center gap-1">
-                <span className="text-xs text-text3">Cast</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={10}
-                  value={video.castSize}
-                  onChange={e => changeCast(e.target.value)}
-                  className="w-10 h-7 text-center text-xs font-medium bg-input-bg border border-border rounded-lg text-foreground focus:outline-none focus:ring-2 focus:ring-accent/25 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
-                />
-              </div>
-
-              {/* Divider */}
-              <div className="w-px h-6 bg-border" />
-
-              {/* Status */}
-              <div className="relative">
-                <button
-                  onClick={() => setStatusOpen(o => !o)}
-                  className={`flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition ${statusStyle.bg} ${statusStyle.text}`}
-                >
-                  <span>{statusStyle.icon}</span>
-                  <span>{video.status}</span>
-                  <svg className="w-3 h-3 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M19 9l-7 7-7-7"/></svg>
-                </button>
-                {statusOpen && (
-                  <>
-                    <div className="fixed inset-0 z-10" onClick={() => setStatusOpen(false)} />
-                    <div className="absolute right-0 top-full mt-1 min-w-[140px] dropdown-menu rounded-xl py-1 z-20">
-                      {STATUSES.map(s => {
-                        const st = STATUS_STYLES[s] || STATUS_STYLES["Idea"];
-                        return (
-                          <button
-                            key={s}
-                            onClick={() => changeStatus(s)}
-                            className={`w-full text-left px-3 py-1.5 text-xs transition flex items-center gap-2 ${video.status === s ? "bg-accent/15 text-accent font-semibold" : "text-text2 hover:bg-hover-row"}`}
-                          >
-                            <span>{st.icon}</span> {s}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-              </div>
-            </div>
+        {/* ─── Top bar: Row 1 — Title + Counter + Close ─── */}
+        <div className="flex items-center gap-3 px-4 py-2.5 bg-surface/95 backdrop-blur border border-border rounded-t-2xl">
+          {!readOnly ? (
+            <input
+              type="text"
+              value={video.skitTitle}
+              onChange={e => update("inspiration", e.target.value)}
+              placeholder="Skit title..."
+              className="flex-1 min-w-0 bg-transparent text-sm font-semibold text-foreground placeholder:text-text3 focus:outline-none border-b border-transparent focus:border-accent/40 transition py-0.5"
+            />
+          ) : (
+            <p className="flex-1 min-w-0 text-sm font-semibold text-foreground truncate">{video.skitTitle || "Untitled"}</p>
           )}
-
-          {/* Close button */}
-          <button onClick={onClose} className="p-1.5 rounded-lg text-text3 hover:text-foreground hover:bg-hover-row transition" title="Close (Esc)">
-            <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          <span className="text-xs text-text3 shrink-0">
+            {idx + 1} / {videos.length}
+          </span>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-text3 hover:text-foreground hover:bg-hover-row transition shrink-0" title="Close (Esc)">
+            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
           </button>
         </div>
 
+        {/* ─── Top bar: Row 2 — Quick actions ─── */}
+        {!readOnly && (
+          <div className="flex items-center gap-2 px-4 py-2 bg-surface/90 backdrop-blur border-x border-border flex-wrap">
+            {/* Cast */}
+            <div className="flex items-center gap-1">
+              <span className="text-[11px] text-text3">Cast</span>
+              <input
+                type="number"
+                min={1}
+                max={10}
+                value={video.castSize}
+                onChange={e => update("castSize", e.target.value)}
+                className="w-9 h-6 text-center text-xs font-medium bg-input-bg border border-border rounded-md text-foreground focus:outline-none focus:ring-1 focus:ring-accent/25 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+              />
+            </div>
+
+            <div className="w-px h-5 bg-border" />
+
+            {/* Approval */}
+            <div className="flex items-center gap-0.5">
+              <button
+                onClick={() => update("approved", video.approved === true ? null : true)}
+                className={`p-1 rounded-md transition-all ${video.approved === true ? "text-t-green bg-t-green/15" : "text-text3/40 hover:text-t-green hover:bg-t-green/10"}`}
+                title="Approve"
+              >
+                <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M20 6L9 17l-5-5"/></svg>
+              </button>
+              <button
+                onClick={() => update("approved", video.approved === false ? null : false)}
+                className={`p-1 rounded-md transition-all ${video.approved === false ? "text-t-rose bg-t-rose/15" : "text-text3/40 hover:text-t-rose hover:bg-t-rose/10"}`}
+                title="Reject"
+              >
+                <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+              </button>
+            </div>
+
+            <div className="w-px h-5 bg-border" />
+
+            {/* Category */}
+            <MiniDropdown
+              value={video.category}
+              options={categoryOptions}
+              onChange={v => update("category", v)}
+              label="Category"
+            />
+
+            <div className="w-px h-5 bg-border" />
+
+            {/* Style Ref */}
+            <input
+              type="text"
+              value={video.styleRef}
+              onChange={e => update("styleRef", e.target.value)}
+              placeholder="Style Ref"
+              className="w-24 h-6 px-2 text-xs bg-input-bg border border-border rounded-md text-foreground placeholder:text-text3 focus:outline-none focus:ring-1 focus:ring-accent/25 transition"
+            />
+
+            <div className="w-px h-5 bg-border" />
+
+            {/* Environment */}
+            <input
+              type="text"
+              value={video.environment}
+              onChange={e => update("environment", e.target.value)}
+              placeholder="Environment"
+              className="w-24 h-6 px-2 text-xs bg-input-bg border border-border rounded-md text-foreground placeholder:text-text3 focus:outline-none focus:ring-1 focus:ring-accent/25 transition"
+            />
+
+            <div className="w-px h-5 bg-border" />
+
+            {/* Status */}
+            <MiniDropdown
+              value={video.status}
+              options={statusOptions}
+              onChange={v => update("status", v)}
+              label="Status"
+            />
+
+            {/* Spacer */}
+            <div className="flex-1" />
+
+            {/* Delete */}
+            <button
+              onClick={handleDelete}
+              className="p-1 rounded-md text-text3/40 hover:text-t-rose hover:bg-t-rose/10 transition"
+              title="Delete skit"
+            >
+              <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M3 6h18M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+            </button>
+          </div>
+        )}
+
         {/* ─── Video area ─── */}
-        <div className="bg-black/90 border-x border-border flex items-center justify-center relative" style={{ aspectRatio: "9/16", maxHeight: "65vh" }}>
+        <div className="bg-black border-x border-border flex items-center justify-center relative overflow-hidden" style={{ aspectRatio: "9/16", maxHeight: "60vh" }}>
           {embedUrl ? (
             <iframe
               key={embedUrl}
               src={embedUrl}
-              className="w-full h-full"
+              className="w-full h-full bg-black"
               allow="autoplay; encrypted-media; fullscreen"
               allowFullScreen
-              style={{ border: "none" }}
+              style={{ border: "none", colorScheme: "dark" }}
             />
           ) : (
-            <div className="flex flex-col items-center gap-4 p-8">
+            <div className="flex flex-col items-center gap-4 p-8 text-white/70">
               <PlatformIcon platform={video.platform} size={48} />
-              <p className="text-sm text-text3 text-center">
+              <p className="text-sm text-center">
                 {video.platform === "instagram"
                   ? "Instagram doesn't support embedded playback"
                   : "This video can't be embedded"}
@@ -285,8 +374,8 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
           {idx > 0 && (
             <button
               onClick={() => setIdx(i => i - 1)}
-              className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition"
-              title="Previous (←)"
+              className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 text-white/80 hover:text-white hover:bg-black/80 transition"
+              title="Previous"
             >
               <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
             </button>
@@ -294,8 +383,8 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
           {idx < videos.length - 1 && (
             <button
               onClick={() => setIdx(i => i + 1)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/50 text-white/80 hover:text-white hover:bg-black/70 transition"
-              title="Next (→)"
+              className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 text-white/80 hover:text-white hover:bg-black/80 transition"
+              title="Next"
             >
               <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
             </button>
@@ -303,17 +392,17 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
         </div>
 
         {/* ─── Bottom bar ─── */}
-        <div className="flex items-center justify-between px-4 py-2 bg-surface/90 backdrop-blur border border-t-0 border-border rounded-b-2xl">
-          <div className="flex items-center gap-2 text-xs text-text3">
+        <div className="flex items-center justify-between px-4 py-2 bg-surface/95 backdrop-blur border border-t-0 border-border rounded-b-2xl">
+          <div className="flex items-center gap-2 text-xs text-text3 min-w-0">
             <PlatformIcon platform={video.platform} size={14} />
-            <span className="truncate max-w-[300px]">{video.url}</span>
+            <a href={video.url} target="_blank" rel="noopener noreferrer" className="truncate max-w-[280px] hover:text-accent transition">{video.url}</a>
           </div>
-          <div className="flex items-center gap-1 text-[11px] text-text3/60">
-            <kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 font-mono">←</kbd>
-            <kbd className="px-1.5 py-0.5 rounded bg-white/5 border border-white/10 font-mono">→</kbd>
-            <span className="ml-1">navigate</span>
-            <kbd className="ml-2 px-1.5 py-0.5 rounded bg-white/5 border border-white/10 font-mono">Esc</kbd>
-            <span className="ml-1">close</span>
+          <div className="flex items-center gap-1 text-[11px] text-text3/50 shrink-0">
+            <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">&larr;</kbd>
+            <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">&rarr;</kbd>
+            <span className="ml-0.5">nav</span>
+            <kbd className="ml-1.5 px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">esc</kbd>
+            <span className="ml-0.5">close</span>
           </div>
         </div>
       </div>

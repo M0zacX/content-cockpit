@@ -1635,7 +1635,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
     const list: VideoEntry[] = [];
     for (const skit of filtered) {
       for (const link of parseLinksField(skit.links)) {
-        list.push({ url: link.url, platform: link.platform, skitId: skit.id, skitTitle: skit.inspiration, approved: skit.approved ?? null, castSize: skit.castSize, status: skit.status });
+        list.push({ url: link.url, platform: link.platform, skitId: skit.id, skitTitle: skit.inspiration, approved: skit.approved ?? null, castSize: skit.castSize, status: skit.status, category: skit.category, styleRef: skit.styleRef, environment: skit.environment });
       }
     }
     return list;
@@ -5096,6 +5096,11 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
           onUpdateSkit={(id, field, value) => {
             persist(skits.map(s => s.id === id ? { ...s, [field]: value } : s));
           }}
+          onDeleteSkit={(id) => {
+            deleteSkits([id]);
+            if (allVideos.filter(v => v.skitId !== id).length === 0) setPreviewIndex(null);
+          }}
+          categories={allCategories}
           readOnly={readOnly}
         />
       )}
