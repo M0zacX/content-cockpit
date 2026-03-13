@@ -1366,7 +1366,24 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false }: Sk
   const [approvalDropdownOpen, setApprovalDropdownOpen] = useState(false);
   const approvalDropdownRef = useRef<HTMLDivElement>(null);
   const [filterCast, setFilterCast] = useState("");
-  const [colWidths, setColWidths] = useState<Record<string, number>>({ links: 100, castSize: 52, category: 130, styleRef: 175, environment: 130, status: 120 });
+  const [colWidths, setColWidths] = useState<Record<string, number>>({ links: 100, castSize: 52, category: 130, styleRef: 175, environment: 130, status: 120, approved: 64 });
+  const defaultColOrder = ["inspiration", "links", "castSize", "category", "styleRef", "script", "environment", "status", "approved"];
+  const [colOrder, setColOrder] = useState<string[]>(() => {
+    if (typeof window !== "undefined") {
+      const saved = localStorage.getItem("skit-col-order");
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved) as string[];
+          // Ensure new columns get added if missing from saved order
+          const missing = defaultColOrder.filter(k => !parsed.includes(k));
+          return missing.length ? [...parsed, ...missing] : parsed;
+        } catch {}
+      }
+    }
+    return defaultColOrder;
+  });
+  const [dragColKey, setDragColKey] = useState<string | null>(null);
+  const [dragOverColKey, setDragOverColKey] = useState<string | null>(null);
   const resizingRef = useRef<{ col: string; startX: number; startW: number } | null>(null);
   const [sortCol, setSortCol] = useState<keyof Skit | null>(null);
   const [sortAsc, setSortAsc] = useState(true);
@@ -2161,11 +2178,21 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false }: Sk
     { key: "script",      label: "Script",        resizable: false },
     { key: "environment", label: "Environment",   resizable: true },
     { key: "status",      label: "Status",        resizable: true },
+    { key: "approved" as keyof Skit, label: "Approval", resizable: false },
   ];
+
+  const orderedColumns = useMemo(() => {
+    const colMap = new Map(columns.map(c => [c.key, c]));
+    return colOrder.map(k => colMap.get(k as keyof Skit)).filter((c): c is { key: keyof Skit; label: string; resizable: boolean } => !!c);
+  }, [colOrder]);
+
+  useEffect(() => {
+    localStorage.setItem("skit-col-order", JSON.stringify(colOrder));
+  }, [colOrder]);
 
   /* ─── Render a single cell ─── */
   function renderCell(skit: Skit, colIdx: number, rowIdx: number) {
-    const col = columns[colIdx];
+    const col = orderedColumns[colIdx];
     const isActive = !readOnly && activeCell?.[0] === rowIdx && activeCell?.[1] === colIdx;
     const value = String(skit[col.key] ?? "");
 
@@ -2514,6 +2541,32 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false }: Sk
             document.body
           )}
         </div>
+      );
+    }
+
+    // Approval buttons
+    if (col.key === "approved") {
+      return !readOnly ? (
+        <div className="flex items-center justify-center gap-0.5">
+          <button
+            onClick={() => persist(skits.map(s => s.id === skit.id ? { ...s, approved: s.approved === true ? null : true } : s))}
+            className={`p-1 rounded transition-all ${skit.approved === true ? "text-t-green bg-t-green/10" : "text-text3/30 hover:text-t-green hover:bg-t-green/10"}`}
+            title={skit.approved === true ? "Approved (click to unset)" : "Approve"}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+          </button>
+          <button
+            onClick={() => persist(skits.map(s => s.id === skit.id ? { ...s, approved: s.approved === false ? null : false } : s))}
+            className={`p-1 rounded transition-all ${skit.approved === false ? "text-t-rose bg-t-rose/10" : "text-text3/30 hover:text-t-rose hover:bg-t-rose/10"}`}
+            title={skit.approved === false ? "Rejected (click to unset)" : "Reject"}
+          >
+            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+          </button>
+        </div>
+      ) : (
+        <span className={`text-xs ${skit.approved === true ? "text-t-green" : skit.approved === false ? "text-t-rose" : "text-text3/40"}`}>
+          {skit.approved === true ? "✓" : skit.approved === false ? "✕" : "—"}
+        </span>
       );
     }
 
@@ -3201,15 +3254,9 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false }: Sk
               <col style={{ width: 40 }} />{/* checkbox */}
               <col style={{ width: 40 }} />{/* # */}
               {canReorder && <col style={{ width: 28 }} />}{/* drag handle */}
-              <col />{/* title (flex) */}
-              <col style={{ width: colWidths.links }} />{/* links */}
-              <col style={{ width: colWidths.castSize }} />
-              <col style={{ width: colWidths.category }} />
-              <col style={{ width: colWidths.styleRef }} />
-              <col />{/* script (flex) */}
-              <col style={{ width: colWidths.environment }} />
-              <col style={{ width: colWidths.status }} />
-              <col style={{ width: 64 }} />{/* approval */}
+              {orderedColumns.map(col => (
+                <col key={col.key} style={colWidths[col.key] ? { width: colWidths[col.key] } : undefined} />
+              ))}
               <col style={{ width: 32 }} />{/* actions */}
             </colgroup>
             <thead>
@@ -3229,11 +3276,33 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false }: Sk
                   {sortById === "asc" ? <SortAsc /> : sortById === "desc" ? <SortDesc /> : <SortNeutral />}
                 </th>
                 {canReorder && <th className="w-7 bg-page-bg/80 backdrop-blur-sm sticky top-0 z-10" />}
-                {columns.map(col => (
+                {orderedColumns.map(col => (
                   <th
                     key={col.key}
+                    draggable
+                    onDragStart={e => { e.stopPropagation(); e.dataTransfer.setData("text/plain", col.key); setDragColKey(col.key); }}
+                    onDragOver={e => { e.preventDefault(); e.stopPropagation(); setDragOverColKey(col.key); }}
+                    onDragLeave={() => setDragOverColKey(null)}
+                    onDrop={e => {
+                      e.preventDefault(); e.stopPropagation();
+                      const from = e.dataTransfer.getData("text/plain");
+                      if (!from || from === col.key) { setDragColKey(null); setDragOverColKey(null); return; }
+                      setColOrder(prev => {
+                        const arr = [...prev];
+                        const fi = arr.indexOf(from), ti = arr.indexOf(col.key);
+                        if (fi < 0 || ti < 0) return prev;
+                        arr.splice(fi, 1);
+                        arr.splice(ti, 0, from);
+                        return arr;
+                      });
+                      setDragColKey(null); setDragOverColKey(null);
+                    }}
+                    onDragEnd={() => { setDragColKey(null); setDragOverColKey(null); }}
                     onClick={() => handleSort(col.key)}
-                    className="group/th relative text-left text-[11px] font-semibold text-text3 uppercase tracking-wider px-3 py-2.5 bg-page-bg/80 backdrop-blur-sm sticky top-0 z-10 cursor-pointer select-none hover:text-text2 transition overflow-hidden whitespace-nowrap"
+                    className={`group/th relative text-left text-[11px] font-semibold text-text3 uppercase tracking-wider px-3 py-2.5 bg-page-bg/80 backdrop-blur-sm sticky top-0 z-10 select-none hover:text-text2 transition overflow-hidden whitespace-nowrap cursor-grab active:cursor-grabbing
+                      ${dragColKey === col.key ? "opacity-40" : ""}
+                      ${dragOverColKey === col.key && dragColKey !== col.key ? "border-l-2 border-accent" : ""}
+                    `}
                   >
                     {col.label}
                     {sortCol === col.key ? (sortAsc ? <SortAsc /> : <SortDesc />) : <SortNeutral />}
@@ -3246,7 +3315,6 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false }: Sk
                     )}
                   </th>
                 ))}
-                <th className="w-16 bg-page-bg/80 backdrop-blur-sm sticky top-0 z-10 text-center px-1 py-2 text-[10px] font-semibold uppercase tracking-wider text-text3">Approval</th>
                 <th className="w-8 bg-page-bg/80 backdrop-blur-sm sticky top-0 z-10" />
               </tr>
             </thead>
@@ -3298,7 +3366,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false }: Sk
                     {canReorder && (
                       <td className="px-1 py-2 text-text3/40 cursor-grab active:cursor-grabbing select-none text-center text-sm">⠿</td>
                     )}
-                    {columns.map((col, colIdx) => (
+                    {orderedColumns.map((col, colIdx) => (
                       <td
                         key={col.key}
                         className="px-2 py-1.5 overflow-hidden"
@@ -3323,31 +3391,6 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false }: Sk
                         {renderCell(skit, colIdx, rowIdx)}
                       </td>
                     ))}
-                    {/* Approval buttons */}
-                    <td className="px-1 py-1.5 text-center">
-                      {!readOnly ? (
-                        <div className="flex items-center justify-center gap-0.5">
-                          <button
-                            onClick={() => persist(skits.map(s => s.id === skit.id ? { ...s, approved: s.approved === true ? null : true } : s))}
-                            className={`p-1 rounded transition-all ${skit.approved === true ? "text-t-green bg-t-green/10" : "text-text3/30 hover:text-t-green hover:bg-t-green/10"}`}
-                            title={skit.approved === true ? "Approved (click to unset)" : "Approve"}
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
-                          </button>
-                          <button
-                            onClick={() => persist(skits.map(s => s.id === skit.id ? { ...s, approved: s.approved === false ? null : false } : s))}
-                            className={`p-1 rounded transition-all ${skit.approved === false ? "text-t-rose bg-t-rose/10" : "text-text3/30 hover:text-t-rose hover:bg-t-rose/10"}`}
-                            title={skit.approved === false ? "Rejected (click to unset)" : "Reject"}
-                          >
-                            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
-                          </button>
-                        </div>
-                      ) : (
-                        <span className={`text-xs ${skit.approved === true ? "text-t-green" : skit.approved === false ? "text-t-rose" : "text-text3/40"}`}>
-                          {skit.approved === true ? "✓" : skit.approved === false ? "✕" : "—"}
-                        </span>
-                      )}
-                    </td>
                     <td className="px-1 py-1.5">
                       {!readOnly && (
                         <button
@@ -3364,7 +3407,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false }: Sk
               })}
               {pageData.length === 0 && (
                 <tr>
-                  <td colSpan={columns.length + 4} className="text-center py-20">
+                  <td colSpan={orderedColumns.length + 3 + (canReorder ? 1 : 0)} className="text-center py-20">
                     <div className="flex flex-col items-center gap-2">
                       <svg className="w-10 h-10 text-text3/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}><path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z"/></svg>
                       <p className="text-sm text-text3">{skits.length === 0 ? "No skits yet" : "No skits match your filters"}</p>
