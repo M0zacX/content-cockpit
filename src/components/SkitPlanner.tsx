@@ -2488,10 +2488,10 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
           tabIndex={readOnly ? -1 : 0}
           onClick={(e) => {
             if (readOnly) return;
-            if ((e.target as HTMLElement).closest("a")) return;
+            if ((e.target as HTMLElement).closest("button")) return;
             setActiveCell([rowIdx, colIdx]);
           }}
-          onFocus={(e) => { if (!readOnly && !(e.target as HTMLElement).closest("a")) setActiveCell([rowIdx, colIdx]); }}
+          onFocus={(e) => { if (!readOnly && !(e.target as HTMLElement).closest("button")) setActiveCell([rowIdx, colIdx]); }}
           className={`w-full min-w-0 px-2 py-1 rounded-md text-sm border border-transparent transition-all duration-150 ${readOnly ? "cursor-default" : "hover:border-border hover:bg-hover-row cursor-text"}`}
         >
           <span className="inline-flex items-center gap-1">
