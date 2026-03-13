@@ -9,6 +9,7 @@ import { useSupabaseData, type SupabaseInfluencer } from "@/hooks/useSupabaseDat
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
 import ShareModal from "@/components/ShareModal";
+import VideoPreview, { type VideoEntry } from "@/components/VideoPreview";
 
 /* ═══════════════════════════════════════════════════
    DEFAULT DATA — 70 skit concepts
@@ -1429,6 +1430,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
   const [undoSnapshot, setUndoSnapshot] = useState<Skit[] | null>(null);
   const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
   const [rowMoveId, setRowMoveId] = useState<string | null>(null);
+  const [previewIndex, setPreviewIndex] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
   const [catDropdownOpen, setCatDropdownOpen] = useState(false);
   const [scriptEditorSkitId, setScriptEditorSkitId] = useState<string | null>(null);
@@ -1627,6 +1629,17 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
   const editorIdx = filtered.findIndex(s => s.id === scriptEditorSkitId);
   const prevSkitId = editorIdx > 0 ? filtered[editorIdx - 1].id : null;
   const nextSkitId = editorIdx >= 0 && editorIdx < filtered.length - 1 ? filtered[editorIdx + 1].id : null;
+
+  // Flat video list for preview modal
+  const allVideos: VideoEntry[] = useMemo(() => {
+    const list: VideoEntry[] = [];
+    for (const skit of filtered) {
+      for (const link of parseLinksField(skit.links)) {
+        list.push({ url: link.url, platform: link.platform, skitId: skit.id, skitTitle: skit.inspiration, approved: skit.approved ?? null, castSize: skit.castSize, status: skit.status });
+      }
+    }
+    return list;
+  }, [filtered]);
 
   // Reset page when filters change
   useEffect(() => { setPage(0); }, [search, filterCat, filterStatus, filterCast]);
@@ -2484,18 +2497,16 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
           <span className="inline-flex items-center gap-1">
             {visible.map((l, i) => {
               const colors = PLATFORM_COLORS[l.platform] || PLATFORM_COLORS.link;
+              const videoIdx = allVideos.findIndex(v => v.url === l.url && v.skitId === skit.id);
               return (
-                <a
+                <button
                   key={i}
-                  href={l.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={e => e.stopPropagation()}
+                  onClick={e => { e.stopPropagation(); if (videoIdx >= 0) setPreviewIndex(videoIdx); }}
                   className={`inline-flex items-center p-1 rounded-full ${colors.bg} ${colors.text} ${colors.hover} transition cursor-pointer`}
                   title={l.url}
                 >
                   <PlatformIcon platform={l.platform} size={13} />
-                </a>
+                </button>
               );
             })}
             {extra > 0 && <span className="text-[10px] text-text3 font-medium">+{extra}</span>}
@@ -5073,6 +5084,19 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
           boardName={boardName}
           isOwner={true}
           onClose={() => setShareOpen(false)}
+        />
+      )}
+
+      {/* ─── Video Preview ─── */}
+      {previewIndex !== null && allVideos.length > 0 && (
+        <VideoPreview
+          videos={allVideos}
+          startIndex={previewIndex}
+          onClose={() => setPreviewIndex(null)}
+          onUpdateSkit={(id, field, value) => {
+            persist(skits.map(s => s.id === id ? { ...s, [field]: value } : s));
+          }}
+          readOnly={readOnly}
         />
       )}
 
