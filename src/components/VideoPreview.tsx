@@ -29,6 +29,7 @@ interface VideoPreviewProps {
   onDeleteSkit: (id: string) => void;
   categoryOptions: CellDropdownOption[];
   statusOptions: CellDropdownOption[];
+  styleRefOptions: CellDropdownOption[];
   getCategoryStyle: (name: string) => { bg: string; text: string };
   getStatusStyle: (name: string) => { bg: string; text: string };
   readOnly?: boolean;
@@ -93,7 +94,7 @@ function PlatformIcon({ platform, size = 16 }: { platform: string; size?: number
    COMPONENT
    ═══════════════════════════════════════════════════ */
 
-export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit, onDeleteSkit, categoryOptions, statusOptions, getCategoryStyle, getStatusStyle, readOnly }: VideoPreviewProps) {
+export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit, onDeleteSkit, categoryOptions, statusOptions, styleRefOptions, getCategoryStyle, getStatusStyle, readOnly }: VideoPreviewProps) {
   const [idx, setIdx] = useState(startIndex);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -233,13 +234,14 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
 
             <div className="w-px h-5 bg-border" />
 
-            {/* Style Ref */}
-            <input
-              type="text"
+            {/* Style Ref — reuses CellDropdown */}
+            <CellDropdown
               value={video.styleRef}
-              onChange={e => update("styleRef", e.target.value)}
-              placeholder="Style Ref"
-              className="w-24 h-6 px-2 text-xs bg-input-bg border border-border rounded-md text-foreground placeholder:text-text3 focus:outline-none focus:ring-1 focus:ring-accent/25 transition"
+              options={styleRefOptions}
+              onChange={v => update("styleRef", v)}
+              pillBg="bg-accent/10"
+              pillText="text-accent"
+              searchable
             />
 
             <div className="w-px h-5 bg-border" />

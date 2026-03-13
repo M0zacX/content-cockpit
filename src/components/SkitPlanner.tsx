@@ -4929,6 +4929,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
           }}
           categoryOptions={dynamicCategoryOptions}
           statusOptions={STATUS_OPTIONS}
+          styleRefOptions={influencers.sort((a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0)).map(inf => ({ value: inf.handle, label: `${inf.favorite ? "\u2B50 " : ""}${inf.name}`, icon: undefined }))}
           getCategoryStyle={(name) => { const s = getCategoryStyle(name); return { bg: s.bg, text: s.text }; }}
           getStatusStyle={(name) => { const s = STATUS_STYLES[name] || STATUS_STYLES["Idea"]; return { bg: s.bg, text: s.text }; }}
           readOnly={readOnly}
