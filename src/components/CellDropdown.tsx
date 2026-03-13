@@ -151,7 +151,7 @@ export default function CellDropdown({
               )}
               {filteredOptions.map((opt, i) => (
                 <button
-                  key={opt.value}
+                  key={`${opt.value}-${i}`}
                   type="button"
                   onMouseEnter={() => setHighlightIdx(i)}
                   onClick={() => { onChange(opt.value); setOpen(false); triggerRef.current?.focus(); }}
