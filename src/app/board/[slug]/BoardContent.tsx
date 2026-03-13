@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/components/AuthProvider";
 import SkitPlanner from "@/components/SkitPlanner";
-import { fetchBoardMemberForUser } from "@/hooks/useBoards";
+import { fetchBoardMemberForUser, useBoards } from "@/hooks/useBoards";
 
 interface Board {
   id: string;
@@ -38,7 +38,7 @@ export default function BoardContent({ slug }: { slug: string }) {
   const router = useRouter();
   const { user } = useAuth();
   const userRef = useRef(user);
-  userRef.current = user;
+  useEffect(() => { userRef.current = user; }, [user]);
 
   // This component is rendered with ssr: false, so sessionStorage is always available.
   // useState initializers safely read from cache — no SSR hydration issues.
@@ -48,6 +48,7 @@ export default function BoardContent({ slug }: { slug: string }) {
   const [canView, setCanView] = useState(cached?.canView ?? false);
   const [canEdit, setCanEdit] = useState(cached?.canEdit ?? false);
   const [notFound, setNotFound] = useState(false);
+  const { ownedBoards, sharedBoards } = useBoards();
 
   // Track what we've already fetched to prevent re-fetching on tab switch
   // (Supabase fires TOKEN_REFRESHED when tab becomes visible, changing user object)
@@ -177,6 +178,7 @@ export default function BoardContent({ slug }: { slug: string }) {
           boardId={board!.id}
           boardName={board!.name}
           readOnly={!canEdit}
+          otherBoards={[...ownedBoards, ...sharedBoards].filter(b => b.id !== board!.id).map(b => ({ id: b.id, name: b.name }))}
         />
       </div>
     </div>

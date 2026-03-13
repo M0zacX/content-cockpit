@@ -124,24 +124,24 @@ function influencerToDb(
 /* ═══════════════════════════════════════════════════
    DEBOUNCE HELPER
    ═══════════════════════════════════════════════════ */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+/* eslint-disable @typescript-eslint/no-explicit-any, react-hooks/use-memo */
 function useDebouncedCallback<T extends (...args: any[]) => any>(
   fn: T,
   delay: number
 ): T {
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const latest = useRef(fn);
-  latest.current = fn;
+  useEffect(() => { latest.current = fn; }, [fn]);
 
   return useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ((...args: any[]) => {
       clearTimeout(timer.current);
       timer.current = setTimeout(() => latest.current(...args), delay);
     }) as T,
-    [delay]
+    [delay] // eslint-disable-line react-hooks/exhaustive-deps
   );
 }
+/* eslint-enable @typescript-eslint/no-explicit-any, react-hooks/use-memo */
 
 /* ═══════════════════════════════════════════════════
    DEFAULT CATEGORIES
@@ -317,6 +317,21 @@ export function useSupabaseData(boardId: string | null) {
     [user, supabase, boardId]
   );
 
+  /* ─── Move skits to another board ─── */
+  const moveSkits = useCallback(
+    async (ids: string[], targetBoardId: string) => {
+      if (!user) return;
+      setSkitsState(prev => {
+        const next = prev.filter(s => !ids.includes(s.id));
+        if (boardId) updateCache(boardId, { skits: next });
+        return next;
+      });
+      const { error } = await supabase.from("skits").update({ board_id: targetBoardId }).in("id", ids);
+      if (error) console.error("Move skit error:", error.message);
+    },
+    [user, supabase, boardId]
+  );
+
   /* ─── Persist influencers ─── */
   const persistInfluencers = useCallback(
     async (infs: SupabaseInfluencer[]) => {
@@ -433,6 +448,7 @@ export function useSupabaseData(boardId: string | null) {
     error,
     persistSkits,
     deleteSkits,
+    moveSkits,
     persistInfluencers,
     deleteInfluencer,
     persistCategories,

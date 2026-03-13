@@ -1342,9 +1342,10 @@ interface SkitPlannerProps {
   boardId: string;
   boardName: string;
   readOnly?: boolean;
+  otherBoards?: { id: string; name: string }[];
 }
 
-export default function SkitPlanner({ boardId, boardName, readOnly = false }: SkitPlannerProps) {
+export default function SkitPlanner({ boardId, boardName, readOnly = false, otherBoards = [] }: SkitPlannerProps) {
   const { theme, toggle } = useTheme();
   const { user, signOut } = useAuth();
   const router = useRouter();
@@ -1356,6 +1357,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false }: Sk
     error: dataError,
     persistSkits: persist,
     deleteSkits,
+    moveSkits,
     persistInfluencers: persistInfs,
     deleteInfluencer: deleteInf,
     persistCategories,
@@ -1400,6 +1402,8 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false }: Sk
   const [activeCell, setActiveCell] = useState<[number, number] | null>(null); // [rowIndex in pageData, colIndex]
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [undoSnapshot, setUndoSnapshot] = useState<Skit[] | null>(null);
+  const [bulkMoveOpen, setBulkMoveOpen] = useState(false);
+  const [rowMoveId, setRowMoveId] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [catDropdownOpen, setCatDropdownOpen] = useState(false);
   const [scriptEditorSkitId, setScriptEditorSkitId] = useState<string | null>(null);
@@ -3230,6 +3234,33 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false }: Sk
             <button onClick={downloadCSV} className="flex items-center gap-1.5 px-3 py-1.5 bg-input-bg text-text2 text-xs font-semibold rounded-lg border border-border hover:bg-hover-row hover:border-border-strong transition">
               <DownloadIcon /> <span className="hidden lg:inline">{selected.size > 0 ? `Export ${selected.size}` : "Export"}</span>
             </button>
+            {!readOnly && selected.size > 0 && otherBoards.length > 0 && (
+              <div className="relative">
+                <button onClick={() => setBulkMoveOpen(o => !o)} className="flex items-center gap-1.5 px-3 py-1.5 bg-accent/10 text-accent text-xs font-semibold rounded-lg border border-accent/30 hover:bg-accent/20 transition">
+                  <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/></svg>
+                  Move {selected.size}
+                </button>
+                {bulkMoveOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[1]" onClick={() => setBulkMoveOpen(false)} />
+                    <div className="dropdown-menu absolute right-0 top-full mt-1.5 z-[2] rounded-xl p-1.5 min-w-[200px] animate-slide-up">
+                      <div className="px-3 py-1.5 text-[10px] font-semibold text-text3 uppercase tracking-wider">Move to board</div>
+                      {otherBoards.map(b => (
+                        <button key={b.id} onClick={() => {
+                          const count = selected.size;
+                          moveSkits(Array.from(selected), b.id);
+                          setSelected(new Set());
+                          setBulkMoveOpen(false);
+                          showToast(`Moved ${count} row${count > 1 ? "s" : ""} to ${b.name}`);
+                        }} className="w-full text-left px-3 py-2 rounded-lg text-xs text-text2 hover:bg-hover-row transition truncate">
+                          {b.name}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
             {!readOnly && selected.size > 0 && (
               <button onClick={() => setShowDeleteConfirm(true)} className="flex items-center gap-1.5 px-3 py-1.5 bg-t-rose/10 text-t-rose text-xs font-semibold rounded-lg border border-t-rose/30 hover:bg-t-rose/20 transition">
                 <TrashIcon /> {selected.size}
@@ -3264,7 +3295,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false }: Sk
               {orderedColumns.map(col => (
                 <col key={col.key} style={colWidths[col.key] ? { width: colWidths[col.key] } : undefined} />
               ))}
-              <col style={{ width: 32 }} />{/* actions */}
+              <col style={{ width: 56 }} />{/* actions */}
             </colgroup>
             <thead>
               <tr className="border-b border-border/60">
@@ -3400,13 +3431,43 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false }: Sk
                     ))}
                     <td className="px-1 py-1.5">
                       {!readOnly && (
-                        <button
-                          onClick={() => setDeleteRowId(skit.id)}
-                          className="opacity-0 group-hover:opacity-100 p-1.5 rounded-md text-text3 hover:text-t-rose hover:bg-t-rose/10 transition-all"
-                          title="Delete row"
-                        >
-                          <TrashIcon />
-                        </button>
+                        <div className="relative flex items-center opacity-0 group-hover:opacity-100 transition-all">
+                          {otherBoards.length > 0 && (
+                            <>
+                              <button
+                                onClick={() => setRowMoveId(prev => prev === skit.id ? null : skit.id)}
+                                className="p-1.5 rounded-md text-text3 hover:text-accent hover:bg-accent/10 transition-all"
+                                title="Move to board"
+                              >
+                                <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/></svg>
+                              </button>
+                              {rowMoveId === skit.id && (
+                                <>
+                                  <div className="fixed inset-0 z-[1]" onClick={() => setRowMoveId(null)} />
+                                  <div className="dropdown-menu absolute right-0 top-full mt-1 z-[2] rounded-xl p-1.5 min-w-[180px] animate-slide-up">
+                                    <div className="px-3 py-1.5 text-[10px] font-semibold text-text3 uppercase tracking-wider">Move to</div>
+                                    {otherBoards.map(b => (
+                                      <button key={b.id} onClick={() => {
+                                        moveSkits([skit.id], b.id);
+                                        setRowMoveId(null);
+                                        showToast(`Moved to ${b.name}`);
+                                      }} className="w-full text-left px-3 py-2 rounded-lg text-xs text-text2 hover:bg-hover-row transition truncate">
+                                        {b.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </>
+                              )}
+                            </>
+                          )}
+                          <button
+                            onClick={() => setDeleteRowId(skit.id)}
+                            className="p-1.5 rounded-md text-text3 hover:text-t-rose hover:bg-t-rose/10 transition-all"
+                            title="Delete row"
+                          >
+                            <TrashIcon />
+                          </button>
+                        </div>
                       )}
                     </td>
                   </tr>
