@@ -145,7 +145,7 @@ export default function CellDropdown({
                 </div>
               </div>
             )}
-            <div className={searchable ? "pb-1.5" : ""}>
+            <div className={`max-h-48 overflow-y-auto ${searchable ? "pb-1.5" : ""}`}>
               {filteredOptions.length === 0 && (
                 <p className="px-3 py-2 text-xs text-text3 text-center">No results</p>
               )}
