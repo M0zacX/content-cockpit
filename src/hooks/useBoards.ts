@@ -16,6 +16,7 @@ export interface Board {
   slug: string;
   isPublic: boolean;
   createdAt: string;
+  memberRole?: "viewer" | "editor";
 }
 
 export interface BoardMember {
@@ -125,20 +126,24 @@ export function useBoards() {
         // 2. Boards shared with me (via board_members)
         const { data: memberRows, error: memberErr } = await supabase
           .from("board_members")
-          .select("board_id")
+          .select("board_id, role")
           .or(`user_id.eq.${user!.id},email.eq.${user!.email}`);
         if (memberErr) throw memberErr;
 
         let sharedData: Board[] = [];
         if (memberRows && memberRows.length > 0) {
-          const boardIds = [...new Set(memberRows.map((r: { board_id: string }) => r.board_id))];
+          const roleMap = new Map<string, "viewer" | "editor">();
+          for (const r of memberRows as { board_id: string; role: "viewer" | "editor" }[]) {
+            roleMap.set(r.board_id, r.role);
+          }
+          const boardIds = [...roleMap.keys()];
           const { data: sharedBoards, error: sharedErr } = await supabase
             .from("boards")
             .select("*")
             .in("id", boardIds)
             .neq("owner_id", user!.id);
           if (sharedErr) throw sharedErr;
-          sharedData = (sharedBoards as DbBoard[]).map(dbToBoard);
+          sharedData = (sharedBoards as DbBoard[]).map(d => ({ ...dbToBoard(d), memberRole: roleMap.get(d.id) }));
         }
 
         if (cancelled) return;

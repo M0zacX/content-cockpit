@@ -3286,8 +3286,8 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
                 </button>
                 {bulkMoveOpen && (
                   <>
-                    <div className="fixed inset-0 z-[1]" onClick={() => setBulkMoveOpen(false)} />
-                    <div className="dropdown-menu absolute right-0 top-full mt-1.5 z-[2] rounded-xl p-1.5 min-w-[200px] animate-slide-up">
+                    <div className="fixed inset-0 z-[20]" onClick={() => setBulkMoveOpen(false)} />
+                    <div className="dropdown-menu absolute right-0 top-full mt-1.5 z-[21] rounded-xl p-1.5 min-w-[200px] animate-slide-up">
                       <div className="px-3 py-1.5 text-[10px] font-semibold text-text3 uppercase tracking-wider">Move to board</div>
                       {otherBoards.map(b => (
                         <button key={b.id} onClick={() => {
@@ -3487,8 +3487,8 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
                               </button>
                               {rowMoveId === skit.id && (
                                 <>
-                                  <div className="fixed inset-0 z-[1]" onClick={() => setRowMoveId(null)} />
-                                  <div className="dropdown-menu absolute right-0 top-full mt-1 z-[2] rounded-xl p-1.5 min-w-[180px] animate-slide-up">
+                                  <div className="fixed inset-0 z-[20]" onClick={() => setRowMoveId(null)} />
+                                  <div className="dropdown-menu absolute right-0 top-full mt-1 z-[21] rounded-xl p-1.5 min-w-[180px] animate-slide-up">
                                     <div className="px-3 py-1.5 text-[10px] font-semibold text-text3 uppercase tracking-wider">Move to</div>
                                     {otherBoards.map(b => (
                                       <button key={b.id} onClick={() => {

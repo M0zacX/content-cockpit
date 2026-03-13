@@ -344,7 +344,7 @@ export default function BoardsPage() {
                     <BoardCard
                       key={board.id}
                       board={board}
-                      role="viewer"
+                      role={board.memberRole || "viewer"}
                       onOpen={() => router.push(`/board/${board.slug}`)}
                     />
                   ))}
