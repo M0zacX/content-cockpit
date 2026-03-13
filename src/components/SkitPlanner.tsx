@@ -1264,6 +1264,7 @@ function PaginationBar({ pageSize, setPageSize, setPage, safePage, totalFiltered
   effectivePageSize: number;
 }) {
   const [pageSizeOpen, setPageSizeOpen] = useState(false);
+  const [pageSizePos, setPageSizePos] = useState<{ bottom: number; left: number }>({ bottom: 0, left: 0 });
   const triggerRef = useRef<HTMLButtonElement>(null);
   return (
     <div className="shrink-0 flex items-center justify-between px-3 lg:px-4 py-2 border-t border-border/50 text-xs">
@@ -1272,7 +1273,13 @@ function PaginationBar({ pageSize, setPageSize, setPage, safePage, totalFiltered
         <div className="relative">
           <button
             ref={triggerRef}
-            onClick={() => setPageSizeOpen(o => !o)}
+            onClick={() => {
+              if (!pageSizeOpen && triggerRef.current) {
+                const rect = triggerRef.current.getBoundingClientRect();
+                setPageSizePos({ bottom: window.innerHeight - rect.top + 4, left: rect.left });
+              }
+              setPageSizeOpen(o => !o);
+            }}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-input-bg border border-border text-xs text-text2 hover:border-border-strong transition focus:outline-none focus:border-accent"
           >
             {pageSize === 0 ? "All" : pageSize}
@@ -1285,8 +1292,8 @@ function PaginationBar({ pageSize, setPageSize, setPage, safePage, totalFiltered
                 className="fixed dropdown-menu rounded-lg py-1 animate-slide-up min-w-[70px]"
                 style={{
                   zIndex: 9999,
-                  bottom: window.innerHeight - (triggerRef.current?.getBoundingClientRect().top ?? 0) + 4,
-                  left: triggerRef.current?.getBoundingClientRect().left ?? 0,
+                  bottom: pageSizePos.bottom,
+                  left: pageSizePos.left,
                 }}
               >
                 {PAGE_SIZES.map(s => (
