@@ -3493,6 +3493,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
                                     {otherBoards.map(b => (
                                       <button key={b.id} onClick={() => {
                                         moveSkits([skit.id], b.id);
+                                        setSelected(prev => { const next = new Set(prev); next.delete(skit.id); return next; });
                                         setRowMoveId(null);
                                         showToast(`Moved to ${b.name}`);
                                       }} className="w-full text-left px-3 py-2 rounded-lg text-xs text-text2 hover:bg-hover-row transition truncate">
