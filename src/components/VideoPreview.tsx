@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
+import CellDropdown, { type CellDropdownOption } from "@/components/CellDropdown";
 
 /* ═══════════════════════════════════════════════════
    TYPES
@@ -26,23 +27,12 @@ interface VideoPreviewProps {
   onClose: () => void;
   onUpdateSkit: (id: string, field: string, value: string | boolean | null) => void;
   onDeleteSkit: (id: string) => void;
-  categories: string[];
+  categoryOptions: CellDropdownOption[];
+  statusOptions: CellDropdownOption[];
+  getCategoryStyle: (name: string) => { bg: string; text: string };
+  getStatusStyle: (name: string) => { bg: string; text: string };
   readOnly?: boolean;
 }
-
-/* ═══════════════════════════════════════════════════
-   STATUSES
-   ═══════════════════════════════════════════════════ */
-
-const STATUSES = ["Idea", "In Progress", "Filming", "Done", "Posted"] as const;
-
-const STATUS_STYLES: Record<string, { bg: string; text: string; icon: string }> = {
-  "Idea":        { bg: "bg-text3/15",    text: "text-text2",    icon: "💡" },
-  "In Progress": { bg: "bg-t-amber/15",  text: "text-t-amber",  icon: "🔄" },
-  "Filming":     { bg: "bg-t-blue/15",   text: "text-t-blue",   icon: "🎬" },
-  "Done":        { bg: "bg-t-green/15",  text: "text-t-green",  icon: "✅" },
-  "Posted":      { bg: "bg-t-purple/15", text: "text-t-purple", icon: "🚀" },
-};
 
 /* ═══════════════════════════════════════════════════
    EMBED URL HELPERS
@@ -100,62 +90,10 @@ function PlatformIcon({ platform, size = 16 }: { platform: string; size?: number
 }
 
 /* ═══════════════════════════════════════════════════
-   MINI DROPDOWN (inline, for category/status)
-   ═══════════════════════════════════════════════════ */
-
-function MiniDropdown({ value, options, onChange, label }: {
-  value: string;
-  options: { value: string; label: string; icon?: string }[];
-  onChange: (v: string) => void;
-  label: string;
-}) {
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const handler = (e: MouseEvent) => {
-      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [open]);
-
-  const selected = options.find(o => o.value === value);
-
-  return (
-    <div ref={ref} className="relative">
-      <button
-        onClick={() => setOpen(o => !o)}
-        className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium bg-input-bg border border-border hover:border-border-strong transition max-w-[120px]"
-        title={label}
-      >
-        {selected?.icon && <span>{selected.icon}</span>}
-        <span className="truncate">{selected?.label || value || label}</span>
-        <svg className="w-3 h-3 opacity-40 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><path d="M19 9l-7 7-7-7"/></svg>
-      </button>
-      {open && (
-        <div className="absolute left-0 bottom-full mb-1 min-w-[140px] max-h-[200px] overflow-y-auto dropdown-menu rounded-xl py-1 z-[10001]">
-          {options.map(o => (
-            <button
-              key={o.value}
-              onClick={() => { onChange(o.value); setOpen(false); }}
-              className={`w-full text-left px-3 py-1.5 text-xs transition flex items-center gap-2 ${value === o.value ? "bg-accent/15 text-accent font-semibold" : "text-text2 hover:bg-hover-row"}`}
-            >
-              {o.icon && <span>{o.icon}</span>} {o.label}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════
    COMPONENT
    ═══════════════════════════════════════════════════ */
 
-export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit, onDeleteSkit, categories, readOnly }: VideoPreviewProps) {
+export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit, onDeleteSkit, categoryOptions, statusOptions, getCategoryStyle, getStatusStyle, readOnly }: VideoPreviewProps) {
   const [idx, setIdx] = useState(startIndex);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -163,7 +101,8 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
   if (!video) return null;
 
   const embedUrl = getEmbedUrl(video.url, video.platform);
-  const statusStyle = STATUS_STYLES[video.status] || STATUS_STYLES["Idea"];
+  const catStyle = getCategoryStyle(video.category);
+  const statStyle = getStatusStyle(video.status);
 
   /* ─── Focus container on mount so keys work ─── */
   // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -176,7 +115,6 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
   const handleKey = useCallback((e: KeyboardEvent) => {
     if (e.key === "Escape") { onClose(); return; }
 
-    // Skip arrow keys only when focused on text inputs (not number inputs)
     const tag = (e.target as HTMLElement)?.tagName;
     const type = (e.target as HTMLInputElement)?.type;
     if (tag === "INPUT" && type === "text") return;
@@ -210,9 +148,6 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
     if (videos.length <= 1) { onClose(); return; }
     setIdx(Math.max(0, nextIdx));
   };
-
-  const statusOptions = STATUSES.map(s => ({ value: s, label: s, icon: STATUS_STYLES[s]?.icon }));
-  const categoryOptions = categories.map(c => ({ value: c, label: c }));
 
   return createPortal(
     <div
@@ -286,12 +221,14 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
 
             <div className="w-px h-5 bg-border" />
 
-            {/* Category */}
-            <MiniDropdown
+            {/* Category — reuses CellDropdown */}
+            <CellDropdown
               value={video.category}
               options={categoryOptions}
               onChange={v => update("category", v)}
-              label="Category"
+              pillBg={catStyle.bg}
+              pillText={catStyle.text}
+              searchable
             />
 
             <div className="w-px h-5 bg-border" />
@@ -318,12 +255,13 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
 
             <div className="w-px h-5 bg-border" />
 
-            {/* Status */}
-            <MiniDropdown
+            {/* Status — reuses CellDropdown */}
+            <CellDropdown
               value={video.status}
               options={statusOptions}
               onChange={v => update("status", v)}
-              label="Status"
+              pillBg={statStyle.bg}
+              pillText={statStyle.text}
             />
 
             {/* Spacer */}
@@ -370,12 +308,11 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
             </div>
           )}
 
-          {/* Nav arrows (overlay) */}
+          {/* Nav arrows */}
           {idx > 0 && (
             <button
               onClick={() => setIdx(i => i - 1)}
               className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 text-white/80 hover:text-white hover:bg-black/80 transition"
-              title="Previous"
             >
               <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
             </button>
@@ -384,7 +321,6 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
             <button
               onClick={() => setIdx(i => i + 1)}
               className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-black/60 text-white/80 hover:text-white hover:bg-black/80 transition"
-              title="Next"
             >
               <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M9 18l6-6-6-6"/></svg>
             </button>
