@@ -1,13 +1,10 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
-  const router = useRouter();
-  const searchParams = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -30,9 +27,11 @@ export default function LoginPage() {
       return;
     }
 
-    const redirectTo = searchParams.get("redirect") || "/";
-    router.push(redirectTo);
-    router.refresh();
+    // Hard navigate so the middleware runs fresh with the new auth cookies.
+    // router.push + router.refresh can race and loop back to /login.
+    const params = new URLSearchParams(window.location.search);
+    const redirectTo = params.get("redirect") || "/";
+    window.location.href = redirectTo;
   }
 
   return (

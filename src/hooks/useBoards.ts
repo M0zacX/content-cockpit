@@ -105,10 +105,15 @@ export function useBoards() {
   const supabaseRef = useRef(createClient());
   const supabase = supabaseRef.current;
   const migratedRef = useRef(false);
+  // Track what user ID we already loaded for — prevents re-fetching on tab
+  // switch (Supabase fires TOKEN_REFRESHED, creating a new user reference)
+  const loadedForRef = useRef<string | null>(null);
 
   /* ─── Load boards ─── */
   useEffect(() => {
     if (!user) { setLoading(false); return; }
+    if (loadedForRef.current === user.id) return;     // already loaded
+    loadedForRef.current = user.id;
     let cancelled = false;
 
     async function load() {
