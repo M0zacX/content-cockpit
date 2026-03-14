@@ -806,6 +806,7 @@ function detectPlatform(url: string): string {
     if (host.includes("youtube") || host.includes("youtu.be")) return "youtube";
     if (host.includes("twitter") || host.includes("x.com")) return "twitter";
     if (host.includes("facebook") || host.includes("fb.watch") || host.includes("fb.com")) return "facebook";
+    if (host.includes("vimeo")) return "vimeo";
   } catch { /* invalid URL */ }
   return "link";
 }
@@ -941,6 +942,7 @@ const PLATFORM_COLORS: Record<string, { bg: string; text: string; hover: string 
   youtube:   { bg: "bg-t-red/10", text: "text-t-red", hover: "hover:bg-t-red/20" },
   twitter:   { bg: "bg-t-sky/10", text: "text-t-sky", hover: "hover:bg-t-sky/20" },
   facebook:  { bg: "bg-t-blue/10", text: "text-t-blue", hover: "hover:bg-t-blue/20" },
+  vimeo:     { bg: "bg-t-sky/10", text: "text-t-sky", hover: "hover:bg-t-sky/20" },
   link:      { bg: "bg-accent/10", text: "text-accent", hover: "hover:bg-accent/20" },
 };
 
@@ -960,6 +962,9 @@ function PlatformIcon({ platform, size = 14 }: { platform: string; size?: number
   );
   if (platform === "facebook") return (
     <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+  );
+  if (platform === "vimeo") return (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor"><path d="M23.977 6.416c-.105 2.338-1.739 5.543-4.894 9.609C15.9 20.065 12.999 22 10.553 22c-1.517 0-2.8-1.4-3.844-4.205l-2.1-7.7C3.84 7.29 3.04 5.89 2.17 5.89c-.19 0-.856.4-1.996 1.193L-.001 4.6A315.67 315.67 0 0 0 3.63 1.29C5.25-.07 6.49-.34 7.338-.17c2.48.19 4.007 2.86 4.582 8.01.62-3.96 1.99-5.94 4.1-5.94 1.16 0 2.596 1.16 3.2 2.16 1.32.86 1.95 2.15 1.76 2.36z"/></svg>
   );
   // generic link
   return (
@@ -1488,7 +1493,8 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
     // Only check when row changes (or focus leaves table)
     if (newRowId && prevRow !== null && currRow !== prevRow) {
       const skit = skits.find(s => s.id === newRowId);
-      if (skit && !skit.inspiration.trim() && !skit.script.trim() && !skit.styleRef.trim() && !skit.environment.trim()) {
+      const isEmpty = skit && !skit.inspiration.trim() && !skit.script.trim() && !skit.styleRef.trim() && !skit.environment.trim() && !skit.links.trim() && !skit.category.trim() && !skit.characters.trim();
+      if (isEmpty) {
         deleteSkits([newRowId]);
         setNewRowId(null);
       } else {
@@ -1501,7 +1507,8 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
   useEffect(() => {
     if (!newRowId) return;
     const skit = skits.find(s => s.id === newRowId);
-    if (skit && !skit.inspiration.trim() && !skit.script.trim() && !skit.styleRef.trim() && !skit.environment.trim()) {
+    const isEmpty = skit && !skit.inspiration.trim() && !skit.script.trim() && !skit.styleRef.trim() && !skit.environment.trim() && !skit.links.trim() && !skit.category.trim() && !skit.characters.trim();
+    if (isEmpty) {
       deleteSkits([newRowId]);
     }
     setNewRowId(null);
@@ -1575,7 +1582,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
 
   /* ─── Add row ─── */
   const addRow = useCallback(() => {
-    const newSkit: Skit = { id: crypto.randomUUID(), inspiration: "", links: "", castSize: "2", characters: "A + B", category: "AI Agent", styleRef: "", script: "", environment: "", status: "Idea", approved: null, sort_order: 0 };
+    const newSkit: Skit = { id: crypto.randomUUID(), inspiration: "", links: "", castSize: "1", characters: "", category: "", styleRef: "", script: "", environment: "", status: "Idea", approved: null, sort_order: 0 };
     persist([newSkit, ...skits].map((s, i) => ({ ...s, sort_order: i })));
     setNewRowId(newSkit.id);
     setPage(0);

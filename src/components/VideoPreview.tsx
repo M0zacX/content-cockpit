@@ -36,6 +36,90 @@ interface VideoPreviewProps {
 }
 
 /* ═══════════════════════════════════════════════════
+   FACEBOOK SDK (lazy-loaded)
+   ═══════════════════════════════════════════════════ */
+
+let fbSdkPromise: Promise<void> | null = null;
+function loadFacebookSdk(): Promise<void> {
+  if (fbSdkPromise) return fbSdkPromise;
+  fbSdkPromise = new Promise((resolve) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window as any).FB) { resolve(); return; }
+    const script = document.createElement("script");
+    script.src = "https://connect.facebook.net/en_US/sdk.js#xfbml=1&version=v21.0";
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    document.body.appendChild(script);
+  });
+  return fbSdkPromise;
+}
+
+function FacebookEmbed({ url }: { url: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    loadFacebookSdk().then(() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      if (ref.current && (window as any).FB) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).FB.XFBML.parse(ref.current);
+      }
+    });
+  }, [url]);
+  return (
+    <div ref={ref} className="w-full h-full flex items-center justify-center overflow-auto">
+      <div
+        className="fb-video"
+        data-href={url}
+        data-width="350"
+        data-allowfullscreen="true"
+        data-autoplay="true"
+      />
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════
+   TWITTER/X SDK (lazy-loaded)
+   ═══════════════════════════════════════════════════ */
+
+let twttrSdkPromise: Promise<void> | null = null;
+function loadTwitterSdk(): Promise<void> {
+  if (twttrSdkPromise) return twttrSdkPromise;
+  twttrSdkPromise = new Promise((resolve) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    if ((window as any).twttr?.widgets) { resolve(); return; }
+    const script = document.createElement("script");
+    script.src = "https://platform.twitter.com/widgets.js";
+    script.async = true;
+    script.onload = () => resolve();
+    document.body.appendChild(script);
+  });
+  return twttrSdkPromise;
+}
+
+function TwitterEmbed({ url }: { url: string }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const tweetId = url.match(/\/status\/(\d+)/)?.[1];
+    if (!tweetId || !ref.current) return;
+    let cancelled = false;
+    ref.current.innerHTML = "";
+    loadTwitterSdk().then(() => {
+      if (cancelled || !ref.current) return;
+      ref.current.innerHTML = ""; // clear again in case StrictMode re-ran
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (window as any).twttr.widgets.createTweet(tweetId, ref.current, {
+        theme: "dark",
+        align: "center",
+      });
+    });
+    return () => { cancelled = true; };
+  }, [url]);
+  return <div ref={ref} className="w-full h-full flex items-center justify-center overflow-auto" />;
+}
+
+/* ═══════════════════════════════════════════════════
    EMBED URL HELPERS
    ═══════════════════════════════════════════════════ */
 
@@ -57,12 +141,13 @@ function getEmbedUrl(url: string, platform: string): string | null {
       const id = u.pathname.match(/\/(?:reel|p)\/([^/?]+)/)?.[1];
       return id ? `https://www.instagram.com/p/${id}/embed/` : null;
     }
-    if (platform === "twitter") {
-      return `https://twitframe.com/show?url=${encodeURIComponent(url)}`;
+    // Twitter/X has no reliable iframe-only embed — show fallback button
+    if (platform === "twitter") return null;
+    if (platform === "vimeo") {
+      const id = u.pathname.match(/\/(\d+)/)?.[1];
+      return id ? `https://player.vimeo.com/video/${id}?autoplay=1` : null;
     }
-    if (platform === "facebook") {
-      return `https://www.facebook.com/plugins/video.php?href=${encodeURIComponent(url)}&show_text=0`;
-    }
+    // Facebook uses SDK-based embed (FacebookEmbed component), not iframe
     return null;
   } catch {
     return null;
@@ -75,6 +160,7 @@ function getPlatformLabel(platform: string): string {
   if (platform === "youtube") return "YouTube";
   if (platform === "twitter") return "X / Twitter";
   if (platform === "facebook") return "Facebook";
+  if (platform === "vimeo") return "Vimeo";
   return "Browser";
 }
 
@@ -98,6 +184,9 @@ function PlatformIcon({ platform, size = 16 }: { platform: string; size?: number
   );
   if (platform === "facebook") return (
     <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor"><path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z"/></svg>
+  );
+  if (platform === "vimeo") return (
+    <svg width={s} height={s} viewBox="0 0 24 24" fill="currentColor"><path d="M23.977 6.416c-.105 2.338-1.739 5.543-4.894 9.609C15.9 20.065 12.999 22 10.553 22c-1.517 0-2.8-1.4-3.844-4.205l-2.1-7.7C3.84 7.29 3.04 5.89 2.17 5.89c-.19 0-.856.4-1.996 1.193L-.001 4.6A315.67 315.67 0 0 0 3.63 1.29C5.25-.07 6.49-.34 7.338-.17c2.48.19 4.007 2.86 4.582 8.01.62-3.96 1.99-5.94 4.1-5.94 1.16 0 2.596 1.16 3.2 2.16 1.32.86 1.95 2.15 1.76 2.36z"/></svg>
   );
   return (
     <svg width={s} height={s} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
@@ -192,7 +281,7 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
       {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
 
       {/* Modal */}
       <div className="relative z-10 w-full max-w-3xl mx-4 flex flex-col max-h-[92vh]">
@@ -315,8 +404,12 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
         )}
 
         {/* ─── Video area ─── */}
-        <div className="bg-black border-x border-border flex items-center justify-center relative overflow-hidden" style={{ aspectRatio: "9/16", maxHeight: "60vh" }}>
-          {embedUrl ? (
+        <div className="bg-black border-x border-border flex items-center justify-center relative overflow-hidden" style={{ aspectRatio: "9/16", maxHeight: "70vh" }}>
+          {video.platform === "facebook" ? (
+            <FacebookEmbed url={video.url} />
+          ) : video.platform === "twitter" ? (
+            <TwitterEmbed url={video.url} />
+          ) : embedUrl ? (
             <iframe
               key={embedUrl}
               src={embedUrl}
@@ -369,15 +462,22 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
             <PlatformIcon platform={video.platform} size={14} />
             <a href={video.url} target="_blank" rel="noopener noreferrer" className="truncate max-w-[280px] hover:text-accent transition">{video.url}</a>
           </div>
-          <div className="flex items-center gap-1 text-[11px] text-text3/50 shrink-0 flex-wrap justify-end">
+          <div className="flex items-center gap-1 text-[11px] text-text3/50 shrink-0">
+            <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">←</kbd>
             <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">A</kbd>
+            <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">→</kbd>
             <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">D</kbd>
             <span className="ml-0.5">nav</span>
-            <kbd className="ml-1.5 px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">W</kbd>
+            <span className="mx-1.5 text-white/10">|</span>
+            <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">↑</kbd>
+            <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">W</kbd>
             <span className="ml-0.5 text-t-green/60">approve</span>
-            <kbd className="ml-1.5 px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">S</kbd>
+            <span className="mx-1.5 text-white/10">|</span>
+            <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">↓</kbd>
+            <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">S</kbd>
             <span className="ml-0.5 text-t-rose/60">reject</span>
-            <kbd className="ml-1.5 px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">esc</kbd>
+            <span className="mx-1.5 text-white/10">|</span>
+            <kbd className="px-1 py-0.5 rounded bg-white/5 border border-white/10 font-mono text-[10px]">esc</kbd>
             <span className="ml-0.5">close</span>
           </div>
         </div>
