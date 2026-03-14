@@ -21,12 +21,19 @@ export interface VideoEntry {
   environment: string;
 }
 
+interface BoardOption {
+  id: string;
+  name: string;
+}
+
 interface VideoPreviewProps {
   videos: VideoEntry[];
   startIndex: number;
   onClose: () => void;
   onUpdateSkit: (id: string, field: string, value: string | boolean | null) => void;
   onDeleteSkit: (id: string) => void;
+  onMoveSkit?: (skitId: string, boardId: string) => void;
+  otherBoards?: BoardOption[];
   categoryOptions: CellDropdownOption[];
   statusOptions: CellDropdownOption[];
   styleRefOptions: CellDropdownOption[];
@@ -197,8 +204,9 @@ function PlatformIcon({ platform, size = 16 }: { platform: string; size?: number
    COMPONENT
    ═══════════════════════════════════════════════════ */
 
-export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit, onDeleteSkit, categoryOptions, statusOptions, styleRefOptions, getCategoryStyle, getStatusStyle, readOnly }: VideoPreviewProps) {
+export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit, onDeleteSkit, onMoveSkit, otherBoards = [], categoryOptions, statusOptions, styleRefOptions, getCategoryStyle, getStatusStyle, readOnly }: VideoPreviewProps) {
   const [idx, setIdx] = useState(startIndex);
+  const [moveOpen, setMoveOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const video = videos[idx];
@@ -391,6 +399,37 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
 
             {/* Spacer */}
             <div className="flex-1" />
+
+            {/* Move to board */}
+            {otherBoards.length > 0 && onMoveSkit && (
+              <div className="relative">
+                <button
+                  onClick={() => setMoveOpen(o => !o)}
+                  className="p-1 rounded-md text-text3/40 hover:text-accent hover:bg-accent/10 transition"
+                  title="Move to board"
+                >
+                  <svg width={15} height={15} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round"><path d="M13.5 4.5 21 12m0 0-7.5 7.5M21 12H3"/></svg>
+                </button>
+                {moveOpen && (
+                  <>
+                    <div className="fixed inset-0 z-[20]" onClick={() => setMoveOpen(false)} />
+                    <div className="dropdown-menu absolute right-0 bottom-full mb-1 z-[21] rounded-xl p-1.5 min-w-[180px] animate-slide-up">
+                      <div className="px-3 py-1.5 text-[10px] font-semibold text-text3 uppercase tracking-wider">Move to</div>
+                      {otherBoards.map(b => (
+                        <button key={b.id} onClick={() => {
+                          onMoveSkit(video.skitId, b.id);
+                          setMoveOpen(false);
+                          if (videos.length <= 1) { onClose(); return; }
+                          setIdx(i => Math.min(i, videos.length - 2));
+                        }} className="w-full text-left px-3 py-2 rounded-lg text-xs text-text2 hover:bg-hover-row transition truncate">
+                          {b.name}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             {/* Delete */}
             <button

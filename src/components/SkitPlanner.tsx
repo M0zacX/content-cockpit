@@ -4941,6 +4941,14 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
             deleteSkits([id]);
             if (allVideos.filter(v => v.skitId !== id).length === 0) setPreviewIndex(null);
           }}
+          onMoveSkit={(id, boardId) => {
+            moveSkits([id], boardId);
+            setSelected(prev => { const next = new Set(prev); next.delete(id); return next; });
+            const board = otherBoards.find(b => b.id === boardId);
+            showToast(`Moved to ${board?.name || "board"}`);
+            if (allVideos.filter(v => v.skitId !== id).length === 0) setPreviewIndex(null);
+          }}
+          otherBoards={otherBoards}
           categoryOptions={dynamicCategoryOptions}
           statusOptions={STATUS_OPTIONS}
           styleRefOptions={influencers.sort((a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0)).map(inf => ({ value: inf.handle, label: `${inf.favorite ? "\u2B50 " : ""}${inf.name}`, icon: undefined }))}

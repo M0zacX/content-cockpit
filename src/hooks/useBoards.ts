@@ -113,7 +113,6 @@ export function useBoards() {
   useEffect(() => {
     if (!user) { setLoading(false); return; }
     if (loadedForRef.current === user.id) return;     // already loaded
-    loadedForRef.current = user.id;
     let cancelled = false;
 
     async function load() {
@@ -129,10 +128,13 @@ export function useBoards() {
         if (ownedErr) throw ownedErr;
 
         // 2. Boards shared with me (via board_members)
+        const orFilter = user!.email
+          ? `user_id.eq.${user!.id},email.eq.${user!.email}`
+          : `user_id.eq.${user!.id}`;
         const { data: memberRows, error: memberErr } = await supabase
           .from("board_members")
           .select("board_id, role")
-          .or(`user_id.eq.${user!.id},email.eq.${user!.email}`);
+          .or(orFilter);
         if (memberErr) throw memberErr;
 
         let sharedData: Board[] = [];
@@ -152,6 +154,9 @@ export function useBoards() {
         }
 
         if (cancelled) return;
+
+        // Mark as loaded only after successful fetch
+        loadedForRef.current = user!.id;
 
         const ownedData = (owned as DbBoard[]).map(dbToBoard);
         setOwnedBoards(ownedData);
