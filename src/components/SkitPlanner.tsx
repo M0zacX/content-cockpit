@@ -1590,18 +1590,14 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
   const prevSkitId = editorIdx > 0 ? filtered[editorIdx - 1].id : null;
   const nextSkitId = editorIdx >= 0 && editorIdx < filtered.length - 1 ? filtered[editorIdx + 1].id : null;
 
-  // Flat video list for preview modal — uses `skits` (not `filtered`) so
-  // changing approval / status / category inside the popup never causes the
-  // video to vanish from the list due to active filters.
-  const allVideos: VideoEntry[] = useMemo(() => {
-    const list: VideoEntry[] = [];
-    for (const skit of skits) {
-      for (const link of parseLinksField(skit.links)) {
-        list.push({ url: link.url, platform: link.platform, skitId: skit.id, skitTitle: skit.inspiration, approved: skit.approved ?? null, favorite: skit.favorite ?? false, castSize: skit.castSize, status: skit.status, category: skit.category, styleRef: skit.styleRef, environment: skit.environment });
-      }
+  // Flat video list for preview modal — uses filtered skits so toolbar
+  // filters (category, status, approval, favorites, cast) apply to popup nav.
+  const allVideos: VideoEntry[] = [];
+  for (const skit of filtered) {
+    for (const link of parseLinksField(skit.links)) {
+      allVideos.push({ url: link.url, platform: link.platform, skitId: skit.id, skitTitle: skit.inspiration, approved: skit.approved ?? null, favorite: skit.favorite ?? false, castSize: skit.castSize, status: skit.status, category: skit.category, styleRef: skit.styleRef, environment: skit.environment });
     }
-    return list;
-  }, [skits]);
+  }
 
   // Reset page when filters change
   useEffect(() => { setPage(0); }, [search, filterCat, filterStatus, filterCast]);
