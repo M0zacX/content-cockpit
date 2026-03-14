@@ -33,6 +33,7 @@
   --color-t-sky: var(--tk-sky);
   --color-t-pink: var(--tk-pink);
   --color-t-red: var(--tk-red);
+  --color-t-wine: var(--tk-wine);
 }
 
 /* ═══════════════════════════════════════════════
@@ -65,6 +66,7 @@
   --tk-sky: #0ea5e9;
   --tk-pink: #ec4899;
   --tk-red: #ef4444;
+  --tk-wine: #9b2335;
 
   /* Glass */
   --glass-subtle-bg: rgba(255, 255, 255, 0.35);
@@ -121,6 +123,7 @@
   --tk-sky: #38bdf8;
   --tk-pink: #f472b6;
   --tk-red: #f87171;
+  --tk-wine: #c2485a;
 
   /* Glass */
   --glass-subtle-bg: rgba(255, 255, 255, 0.04);

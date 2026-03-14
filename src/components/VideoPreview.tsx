@@ -4,6 +4,48 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { createPortal } from "react-dom";
 import CellDropdown, { type CellDropdownOption } from "@/components/CellDropdown";
 
+const ENVIRONMENT_PRESETS = [
+  "Office / desk setup", "Office / laptop", "Office / dual monitors", "Office / standing desk",
+  "Office / meeting room", "Office / conference room", "Office / boardroom", "Office / open plan",
+  "Office / cubicle", "Office / break room", "Office / kitchen", "Office / hallway",
+  "Office / lobby", "Office / elevator", "Office / rooftop", "Office / parking garage",
+  "Office / server room", "Office / supply closet", "Office / reception", "Office / bathroom",
+  "Home / living room", "Home / bedroom", "Home / kitchen", "Home / bathroom",
+  "Home / home office", "Home / garage", "Home / backyard", "Home / front porch",
+  "Home / basement", "Home / attic", "Home / dining room", "Home / couch",
+  "Car / parked", "Car / driving", "Car / backseat", "Car / parking lot",
+  "Uber / backseat", "Bus / seat", "Subway / train", "Airport / terminal",
+  "Airport / gate", "Airport / lounge", "Airplane / seat",
+  "Café / coffee shop", "Café / outdoor seating", "Restaurant / bar", "Restaurant / booth",
+  "Restaurant / patio", "Fast food / counter", "Food truck", "Bar / nightclub",
+  "Juice bar / smoothie shop", "Brunch spot",
+  "Outdoor / street", "Outdoor / sidewalk", "Outdoor / park", "Outdoor / bench",
+  "Outdoor / rooftop", "Outdoor / balcony", "Outdoor / beach", "Outdoor / pool",
+  "Outdoor / garden", "Outdoor / trail", "Outdoor / bridge", "Outdoor / alley",
+  "Outdoor / parking lot", "Outdoor / gas station", "Outdoor / basketball court",
+  "Store / retail", "Store / mall", "Store / supermarket", "Store / checkout line",
+  "Store / fitting room", "Store / electronics", "Store / bookstore", "Pharmacy",
+  "Laundromat", "Barbershop / salon", "Bank", "Post office",
+  "Gym / fitness", "Gym / weight room", "Gym / treadmill", "Gym / locker room",
+  "Yoga studio", "Spa / sauna", "Boxing ring", "Basketball court",
+  "Coworking space", "Startup office", "Pitch room", "Whiteboard wall",
+  "Server room", "Recording studio", "Podcast booth", "Streaming setup",
+  "Stage / podium", "Convention / expo", "Hotel room", "Hotel lobby",
+  "Waiting room", "Doctor's office", "Library", "Classroom / lecture hall",
+  "Museum", "Movie theater", "Church / mosque", "Courtroom",
+  "Elevator", "Stairwell", "Rooftop", "Warehouse", "Construction site",
+  "Green screen / studio", "Blank wall / neutral", "Walking + talking",
+];
+
+function filterEnvPresets(query: string): string[] {
+  if (!query.trim()) return ENVIRONMENT_PRESETS;
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return ENVIRONMENT_PRESETS.filter(p => {
+    const lower = p.toLowerCase();
+    return words.every(w => lower.includes(w));
+  });
+}
+
 /* ═══════════════════════════════════════════════════
    TYPES
    ═══════════════════════════════════════════════════ */
@@ -14,6 +56,7 @@ export interface VideoEntry {
   skitId: string;
   skitTitle: string;
   approved: boolean | null;
+  favorite: boolean;
   castSize: string;
   status: string;
   category: string;
@@ -207,7 +250,12 @@ function PlatformIcon({ platform, size = 16 }: { platform: string; size?: number
 export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit, onDeleteSkit, onMoveSkit, otherBoards = [], categoryOptions, statusOptions, styleRefOptions, getCategoryStyle, getStatusStyle, readOnly }: VideoPreviewProps) {
   const [idx, setIdx] = useState(startIndex);
   const [moveOpen, setMoveOpen] = useState(false);
+  const [envOpen, setEnvOpen] = useState(false);
+  const [envHl, setEnvHl] = useState(0);
+  const [envPos, setEnvPos] = useState<{ top: number; left: number } | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const envInputRef = useRef<HTMLInputElement>(null);
+  const envDropRef = useRef<HTMLDivElement>(null);
 
   const video = videos[idx];
   if (!video) return null;
@@ -351,6 +399,17 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
               </button>
             </div>
 
+            {/* Favorite */}
+            <button
+              onClick={() => update("favorite", !video.favorite)}
+              className={`p-1 rounded-md transition-all ${video.favorite ? "text-t-wine bg-t-wine/15" : "text-text3/40 hover:text-t-wine hover:bg-t-wine/10"}`}
+              title={video.favorite ? "Unfavorite" : "Favorite"}
+            >
+              <svg width={15} height={15} viewBox="0 0 24 24" fill={video.favorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+              </svg>
+            </button>
+
             <div className="w-px h-5 bg-border" />
 
             {/* Category — reuses CellDropdown */}
@@ -378,13 +437,59 @@ export default function VideoPreview({ videos, startIndex, onClose, onUpdateSkit
             <div className="w-px h-5 bg-border" />
 
             {/* Environment */}
-            <input
-              type="text"
-              value={video.environment}
-              onChange={e => update("environment", e.target.value)}
-              placeholder="Environment"
-              className="w-24 h-6 px-2 text-xs bg-input-bg border border-border rounded-md text-foreground placeholder:text-text3 focus:outline-none focus:ring-1 focus:ring-accent/25 transition"
-            />
+            <div className="relative">
+              <input
+                ref={envInputRef}
+                type="text"
+                value={video.environment}
+                onChange={e => { update("environment", e.target.value); setEnvHl(0); setEnvOpen(true); }}
+                onFocus={() => {
+                  if (envInputRef.current) {
+                    const rect = envInputRef.current.getBoundingClientRect();
+                    setEnvPos({ top: rect.bottom + 4, left: rect.left });
+                  }
+                  setEnvHl(0);
+                  setEnvOpen(true);
+                }}
+                onBlur={() => setTimeout(() => setEnvOpen(false), 150)}
+                onKeyDown={e => {
+                  if (!envOpen) return;
+                  const filtered = filterEnvPresets(video.environment);
+                  const scrollTo = (idx: number) => setTimeout(() => envDropRef.current?.children[idx]?.scrollIntoView({ block: "nearest" }), 0);
+                  if (e.key === "ArrowDown") { e.preventDefault(); setEnvHl(i => { const n = (i + 1) % filtered.length; scrollTo(n); return n; }); }
+                  else if (e.key === "ArrowUp") { e.preventDefault(); setEnvHl(i => { const n = (i - 1 + filtered.length) % filtered.length; scrollTo(n); return n; }); }
+                  else if (e.key === "Enter" && filtered.length > 0) { e.preventDefault(); update("environment", filtered[envHl] || filtered[0]); setEnvOpen(false); }
+                  else if (e.key === "Escape") { setEnvOpen(false); }
+                }}
+                placeholder="Environment"
+                className="w-28 h-6 px-2 text-xs bg-input-bg border border-border rounded-md text-foreground placeholder:text-text3 focus:outline-none focus:ring-1 focus:ring-accent/25 transition"
+              />
+              {envOpen && envPos && (() => {
+                const filtered = filterEnvPresets(video.environment);
+                return filtered.length > 0 ? createPortal(
+                  <div
+                    ref={envDropRef}
+                    className="fixed dropdown-menu rounded-xl py-1 max-h-40 overflow-y-auto w-52"
+                    style={{ top: envPos.top, left: envPos.left, zIndex: 10002 }}
+                  >
+                    {filtered.map((preset, i) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onMouseEnter={() => setEnvHl(i)}
+                        onMouseDown={e => { e.preventDefault(); update("environment", preset); setEnvOpen(false); }}
+                        className={`w-full text-left px-3 py-1.5 text-xs font-medium transition-colors
+                          ${i === envHl ? "bg-accent/10 text-accent" : "text-text2 hover:bg-hover-row"}
+                          ${preset === video.environment ? "font-bold" : ""}`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                  </div>,
+                  document.body
+                ) : null;
+              })()}
+            </div>
 
             <div className="w-px h-5 bg-border" />
 

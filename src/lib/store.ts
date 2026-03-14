@@ -38,6 +38,7 @@ export interface Skit {
   environment: string;
   status: string;
   approved?: boolean | null;
+  favorite?: boolean;
   isPublic?: boolean;
   sort_order?: number;
 }

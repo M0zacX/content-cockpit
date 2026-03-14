@@ -91,6 +91,58 @@ const defaultSkits: Omit<Skit, "id">[] = [
 /* ═══════════════════════════════════════════════════
    CONSTANTS
    ═══════════════════════════════════════════════════ */
+const ENVIRONMENT_PRESETS = [
+  // Office
+  "Office / desk setup", "Office / laptop", "Office / dual monitors", "Office / standing desk",
+  "Office / meeting room", "Office / conference room", "Office / boardroom", "Office / open plan",
+  "Office / cubicle", "Office / break room", "Office / kitchen", "Office / hallway",
+  "Office / lobby", "Office / elevator", "Office / rooftop", "Office / parking garage",
+  "Office / server room", "Office / supply closet", "Office / reception", "Office / bathroom",
+  // Home
+  "Home / living room", "Home / bedroom", "Home / kitchen", "Home / bathroom",
+  "Home / home office", "Home / garage", "Home / backyard", "Home / front porch",
+  "Home / basement", "Home / attic", "Home / dining room", "Home / couch",
+  // Car & Transport
+  "Car / parked", "Car / driving", "Car / backseat", "Car / parking lot",
+  "Uber / backseat", "Bus / seat", "Subway / train", "Airport / terminal",
+  "Airport / gate", "Airport / lounge", "Airplane / seat",
+  // Food & Drink
+  "Café / coffee shop", "Café / outdoor seating", "Restaurant / bar", "Restaurant / booth",
+  "Restaurant / patio", "Fast food / counter", "Food truck", "Bar / nightclub",
+  "Juice bar / smoothie shop", "Brunch spot",
+  // Outdoor
+  "Outdoor / street", "Outdoor / sidewalk", "Outdoor / park", "Outdoor / bench",
+  "Outdoor / rooftop", "Outdoor / balcony", "Outdoor / beach", "Outdoor / pool",
+  "Outdoor / garden", "Outdoor / trail", "Outdoor / bridge", "Outdoor / alley",
+  "Outdoor / parking lot", "Outdoor / gas station", "Outdoor / basketball court",
+  // Retail & Commercial
+  "Store / retail", "Store / mall", "Store / supermarket", "Store / checkout line",
+  "Store / fitting room", "Store / electronics", "Store / bookstore", "Pharmacy",
+  "Laundromat", "Barbershop / salon", "Bank", "Post office",
+  // Fitness & Wellness
+  "Gym / fitness", "Gym / weight room", "Gym / treadmill", "Gym / locker room",
+  "Yoga studio", "Spa / sauna", "Boxing ring", "Basketball court",
+  // Tech & Startup
+  "Coworking space", "Startup office", "Pitch room", "Whiteboard wall",
+  "Server room", "Recording studio", "Podcast booth", "Streaming setup",
+  // Events & Public
+  "Stage / podium", "Convention / expo", "Hotel room", "Hotel lobby",
+  "Waiting room", "Doctor's office", "Library", "Classroom / lecture hall",
+  "Museum", "Movie theater", "Church / mosque", "Courtroom",
+  // Misc
+  "Elevator", "Stairwell", "Rooftop", "Warehouse", "Construction site",
+  "Green screen / studio", "Blank wall / neutral", "Walking + talking",
+];
+
+function filterEnvPresets(query: string): string[] {
+  if (!query.trim()) return ENVIRONMENT_PRESETS;
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return ENVIRONMENT_PRESETS.filter(p => {
+    const lower = p.toLowerCase();
+    return words.every(w => lower.includes(w));
+  });
+}
+
 const STATUSES = ["Idea", "In Progress", "Filming", "Done", "Posted"] as const;
 const PAGE_SIZES = [10, 15, 25, 0] as const; // 0 = All
 
@@ -840,12 +892,63 @@ function dedupeNewSkits(newSkits: Skit[], existingUrls: Set<string>): { unique: 
   return { unique, dupes };
 }
 
+/* ─── Find duplicate groups among existing skits ─── */
+function findDuplicateGroups(skits: Skit[]): { key: string; skits: Skit[] }[] {
+  const byUrl = new Map<string, Skit[]>();
+  const byTitle = new Map<string, Skit[]>();
+
+  for (const s of skits) {
+    // Group by URL
+    for (const { url } of parseLinksField(s.links)) {
+      const norm = url.toLowerCase().replace(/\/$/, "");
+      if (!byUrl.has(norm)) byUrl.set(norm, []);
+      byUrl.get(norm)!.push(s);
+    }
+    // Group by title (non-empty only)
+    const title = s.inspiration.trim().toLowerCase();
+    if (title && title !== "title") {
+      if (!byTitle.has(title)) byTitle.set(title, []);
+      byTitle.get(title)!.push(s);
+    }
+  }
+
+  const groups = new Map<string, { key: string; skits: Skit[] }>();
+  const seen = new Set<string>();
+
+  // URL-based duplicates take priority
+  for (const [url, dupes] of byUrl) {
+    if (dupes.length < 2) continue;
+    // Dedupe skit IDs within group
+    const unique = [...new Map(dupes.map(s => [s.id, s])).values()];
+    if (unique.length < 2) continue;
+    const groupKey = `url:${url}`;
+    groups.set(groupKey, { key: groupKey, skits: unique });
+    for (const s of unique) seen.add(s.id);
+  }
+
+  // Title-based duplicates (only for skits not already in a URL group)
+  for (const [title, dupes] of byTitle) {
+    if (dupes.length < 2) continue;
+    const unique = [...new Map(dupes.map(s => [s.id, s])).values()].filter(s => !seen.has(s.id));
+    // Need at least 2 unseen skits, or all of them if none were seen
+    const all = [...new Map(dupes.map(s => [s.id, s])).values()];
+    if (all.length < 2) continue;
+    // Check if any are already in URL groups
+    const unseenCount = all.filter(s => !seen.has(s.id)).length;
+    if (unseenCount < 2 && all.length - unseenCount > 0) continue;
+    const groupKey = `title:${title}`;
+    groups.set(groupKey, { key: groupKey, skits: all });
+  }
+
+  return [...groups.values()];
+}
+
 /* ─── Reel research markdown parser ─── */
 interface ParsedReelCreator {
   handle: string;
   realName: string;
   platform: string;
-  reels: { title: string; url: string; likes?: string }[];
+  reels: { title: string; url: string; likes?: string; category?: string; environment?: string; castSize?: string; characters?: string }[];
   profileUrl?: string;
 }
 
@@ -871,7 +974,17 @@ function parseReelResearchMarkdown(markdown: string): ParsedReelCreator[] {
         profileUrl = url;
       } else {
         const likesMatch = extra.match(/([\d.]+[kKmM]?)\s*likes/i);
-        reels.push({ title, url, likes: likesMatch?.[1] });
+        const catMatch = extra.match(/cat:([^|]+)/i);
+        const envMatch = extra.match(/env:([^|]+)/i);
+        const castMatch = extra.match(/cast:(\d+)/i);
+        const charsMatch = extra.match(/chars:([^|]+)/i);
+        reels.push({
+          title, url, likes: likesMatch?.[1],
+          category: catMatch?.[1]?.trim(),
+          environment: envMatch?.[1]?.trim(),
+          castSize: castMatch?.[1]?.trim(),
+          characters: charsMatch?.[1]?.trim(),
+        });
       }
     }
     if (reels.length > 0) {
@@ -1237,6 +1350,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
   const [filterApproval, setFilterApproval] = useState<"Active" | "All" | "Pending" | "Approved" | "Rejected">("Active");
   const [approvalDropdownOpen, setApprovalDropdownOpen] = useState(false);
   const approvalDropdownRef = useRef<HTMLDivElement>(null);
+  const [filterFavorite, setFilterFavorite] = useState(false);
   const [filterCast, setFilterCast] = useState("");
   const [colWidths, setColWidths] = useState<Record<string, number>>({ links: 100, castSize: 52, category: 130, styleRef: 175, environment: 130, status: 120, approved: 64 });
   const defaultColOrder = ["inspiration", "links", "castSize", "category", "styleRef", "script", "environment", "status", "approved"];
@@ -1279,6 +1393,11 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
   const [scriptDraft, setScriptDraft] = useState("");
   const [scriptLinkCopied, setScriptLinkCopied] = useState(false);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
+  const [mobileEnvOpen, setMobileEnvOpen] = useState(false);
+  const [envHl, setEnvHl] = useState(0);
+  const [envPos, setEnvPos] = useState<{ top: number; left: number } | null>(null);
+  const envInputRef = useRef<HTMLInputElement>(null);
+  const envDropRef = useRef<HTMLDivElement>(null);
   const [shareOpen, setShareOpen] = useState(false);
   const [showCatManager, setShowCatManager] = useState(false);
   const [editingCatIdx, setEditingCatIdx] = useState<number | null>(null);
@@ -1286,6 +1405,9 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
   const [newCatName, setNewCatName] = useState("");
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteRowId, setDeleteRowId] = useState<string | null>(null);
+  const [dupeGroups, setDupeGroups] = useState<{ key: string; skits: Skit[] }[] | null>(null);
+  const [dupeOpen, setDupeOpen] = useState(false);
+  const [dupeSelections, setDupeSelections] = useState<Record<string, string>>({});
   const [sortById, setSortById] = useState<"asc" | "desc" | null>(null);
   const [newRowId, setNewRowId] = useState<string | null>(null);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
@@ -1373,7 +1495,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
   // Row drag-reorder
   const [dragRowId, setDragRowId] = useState<string | null>(null);
   const [dragOverRowId, setDragOverRowId] = useState<string | null>(null);
-  const canReorder = !readOnly && !sortCol && !sortById && !search && filterCat === "All" && filterStatus === "All" && (filterApproval === "Active" || filterApproval === "All") && !filterCast;
+  const canReorder = !readOnly && !sortCol && !sortById && !search && filterCat === "All" && filterStatus === "All" && (filterApproval === "Active" || filterApproval === "All") && !filterCast && !filterFavorite;
 
   /* ─── Script editor derived values ─── */
   const getDefaultChars = (n: number | string) => {
@@ -1433,6 +1555,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
       if (filterApproval === "Approved" && s.approved !== true) return false;
       if (filterApproval === "Rejected" && s.approved !== false) return false;
     }
+    if (filterFavorite && !s.favorite) return false;
     if (filterCast && s.castSize !== filterCast) return false;
     if (search) {
       const q = search.toLowerCase();
@@ -1474,7 +1597,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
     const list: VideoEntry[] = [];
     for (const skit of skits) {
       for (const link of parseLinksField(skit.links)) {
-        list.push({ url: link.url, platform: link.platform, skitId: skit.id, skitTitle: skit.inspiration, approved: skit.approved ?? null, castSize: skit.castSize, status: skit.status, category: skit.category, styleRef: skit.styleRef, environment: skit.environment });
+        list.push({ url: link.url, platform: link.platform, skitId: skit.id, skitTitle: skit.inspiration, approved: skit.approved ?? null, favorite: skit.favorite ?? false, castSize: skit.castSize, status: skit.status, category: skit.category, styleRef: skit.styleRef, environment: skit.environment });
       }
     }
     return list;
@@ -1694,12 +1817,12 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
           id: crypto.randomUUID(),
           inspiration: reel.title,
           links: reel.url,
-          castSize: "",
-          characters: "",
-          category: "",
+          castSize: reel.castSize || "",
+          characters: reel.characters || "",
+          category: reel.category || "",
           styleRef: creator.handle,
           script: "",
-          environment: "",
+          environment: reel.environment || "",
           status: "Idea",
           approved: null,
         });
@@ -2480,6 +2603,72 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
       );
     }
 
+    // Environment combobox — text input with preset suggestions
+    if (col.key === "environment") {
+      if (!isActive) {
+        return (
+          <div
+            data-cell={`${rowIdx}-${colIdx}`}
+            tabIndex={readOnly ? -1 : 0}
+            onClick={() => { if (!readOnly) setActiveCell([rowIdx, colIdx]); }}
+            onFocus={() => { if (!readOnly) setActiveCell([rowIdx, colIdx]); }}
+            className={`w-full min-w-0 px-2 py-1 rounded-md text-sm border border-transparent truncate transition-all duration-150 text-text2
+              ${!value ? "text-text3" : ""}
+              ${readOnly ? "cursor-default" : "hover:border-border hover:bg-hover-row cursor-text"}
+            `}
+          >
+            {value || "—"}
+          </div>
+        );
+      }
+      const envSuggestions = filterEnvPresets(value);
+      return (
+        <>
+          <input
+            ref={envInputRef}
+            data-cell={`${rowIdx}-${colIdx}`}
+            type="text"
+            autoFocus
+            value={value}
+            onChange={e => { updateSkit(skit.id, "environment", e.target.value); setEnvHl(0); if (envInputRef.current) { const r = envInputRef.current.getBoundingClientRect(); setEnvPos({ top: r.bottom + 4, left: r.left }); } }}
+            onFocus={() => { setActiveCell([rowIdx, colIdx]); setEnvHl(0); if (envInputRef.current) { const r = envInputRef.current.getBoundingClientRect(); setEnvPos({ top: r.bottom + 4, left: r.left }); } }}
+            onBlur={() => setActiveCell(null)}
+            onKeyDown={e => {
+              if (envSuggestions.length === 0) return;
+              const scrollTo = (idx: number) => setTimeout(() => envDropRef.current?.children[idx]?.scrollIntoView({ block: "nearest" }), 0);
+              if (e.key === "ArrowDown") { e.preventDefault(); e.stopPropagation(); setEnvHl(i => { const n = (i + 1) % envSuggestions.length; scrollTo(n); return n; }); }
+              else if (e.key === "ArrowUp") { e.preventDefault(); e.stopPropagation(); setEnvHl(i => { const n = (i - 1 + envSuggestions.length) % envSuggestions.length; scrollTo(n); return n; }); }
+              else if (e.key === "Enter") { e.preventDefault(); e.stopPropagation(); updateSkit(skit.id, "environment", envSuggestions[envHl] || envSuggestions[0]); setActiveCell(null); }
+            }}
+            placeholder="Type or select…"
+            className="w-full px-2 py-1 rounded-md text-sm border bg-transparent transition-all duration-150 placeholder:text-text3 border-accent outline-2 outline-accent/20 text-text2"
+          />
+          {envSuggestions.length > 0 && envPos && createPortal(
+            <div
+              ref={envDropRef}
+              className="fixed dropdown-menu rounded-xl py-1 max-h-40 overflow-y-auto w-52"
+              style={{ top: envPos.top, left: envPos.left, zIndex: 9999 }}
+            >
+              {envSuggestions.map((preset, i) => (
+                <button
+                  key={preset}
+                  type="button"
+                  onMouseEnter={() => setEnvHl(i)}
+                  onMouseDown={e => { e.preventDefault(); updateSkit(skit.id, "environment", preset); setActiveCell(null); }}
+                  className={`w-full text-left px-3 py-1.5 text-xs font-medium transition-colors
+                    ${i === envHl ? "bg-accent/10 text-accent" : "text-text2 hover:bg-hover-row"}
+                    ${preset === value ? "font-bold" : ""}`}
+                >
+                  {preset}
+                </button>
+              ))}
+            </div>,
+            document.body
+          )}
+        </>
+      );
+    }
+
     // Text input cells
     if (!isActive) {
       return (
@@ -2659,14 +2848,33 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
               {skit.styleRef && (() => { const inf = influencers.find(i => i.handle === skit.styleRef); return inf && inf.platforms.length > 0 ? <div className="mt-1 flex flex-wrap gap-1">{inf.platforms.map((p, pi) => { const c = PLATFORM_COLORS[p.platform] || PLATFORM_COLORS.link; return <a key={pi} href={p.url} target="_blank" rel="noopener noreferrer" className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-medium ${c.bg} ${c.text} ${c.hover} transition`}><PlatformIcon platform={p.platform} size={10} />{p.platform.charAt(0).toUpperCase() + p.platform.slice(1)}</a>; })}</div> : null; })()}
             </div>
             {/* Environment */}
-            <div>
+            <div className="relative">
               <label className="text-[10px] uppercase tracking-wider text-text3 font-semibold">Environment</label>
               <input
                 value={skit.environment}
                 onChange={e => updateSkit(skit.id, "environment", e.target.value)}
+                onFocus={() => setMobileEnvOpen(true)}
+                onBlur={() => setTimeout(() => setMobileEnvOpen(false), 150)}
                 className="w-full mt-0.5 px-2.5 py-1.5 bg-input-bg border border-border rounded-lg text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-accent/20 focus:border-accent transition"
-                placeholder="Filming location"
+                placeholder="Type or select…"
               />
+              {mobileEnvOpen && (() => {
+                const filtered = filterEnvPresets(skit.environment);
+                return filtered.length > 0 ? (
+                  <div className="absolute left-0 right-0 top-full mt-1 dropdown-menu rounded-xl py-1 max-h-40 overflow-y-auto z-30">
+                    {filtered.map(preset => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onMouseDown={e => { e.preventDefault(); updateSkit(skit.id, "environment", preset); setMobileEnvOpen(false); }}
+                        className={`w-full text-left px-3 py-1.5 text-xs font-medium transition-colors hover:bg-hover-row ${preset === skit.environment ? "text-accent font-bold" : "text-text2"}`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                  </div>
+                ) : null;
+              })()}
             </div>
             {/* Script button + delete */}
             <div className="flex items-center gap-2 pt-1">
@@ -3104,6 +3312,22 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
             })()}
           </div>
 
+          {/* Favorite filter toggle */}
+          <button
+            onClick={() => setFilterFavorite(f => !f)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-accent/20 ${
+              filterFavorite
+                ? "bg-t-wine/15 text-t-wine border-transparent"
+                : "bg-input-bg text-text2 border-border hover:border-border-strong"
+            }`}
+            title={filterFavorite ? "Show all skits" : "Show favorites only"}
+          >
+            <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill={filterFavorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+            </svg>
+            {filterFavorite ? <>Favorites <span className="opacity-60">({skits.filter(s => s.favorite).length})</span></> : "Favorites"}
+          </button>
+
           {/* Category manager button (owner/editor only) */}
           {!readOnly && (
             <button
@@ -3142,6 +3366,22 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
             <button onClick={downloadCSV} className="flex items-center gap-1.5 px-3 py-1.5 bg-input-bg text-text2 text-xs font-semibold rounded-lg border border-border hover:bg-hover-row hover:border-border-strong transition">
               <DownloadIcon /> <span className="hidden lg:inline">{selected.size > 0 ? `Export ${selected.size}` : "Export"}</span>
             </button>
+            {!readOnly && <button onClick={() => {
+              const groups = findDuplicateGroups(skits);
+              if (groups.length === 0) { showToast("No duplicates found"); return; }
+              setDupeGroups(groups);
+              // Default: pick approved one first, then oldest (last in array), then first
+              const sel: Record<string, string> = {};
+              for (const g of groups) {
+                const approved = g.skits.find(s => s.approved === true);
+                sel[g.key] = approved ? approved.id : g.skits[g.skits.length - 1].id;
+              }
+              setDupeSelections(sel);
+              setDupeOpen(true);
+            }} className="flex items-center gap-1.5 px-3 py-1.5 bg-input-bg text-text2 text-xs font-semibold rounded-lg border border-border hover:bg-hover-row hover:border-border-strong transition" title="Find & merge duplicate skits">
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+              <span className="hidden lg:inline">Duplicates</span>
+            </button>}
             {!readOnly && selected.size > 0 && otherBoards.length > 0 && (
               <div className="relative">
                 <button onClick={() => setBulkMoveOpen(o => !o)} className="flex items-center gap-1.5 px-3 py-1.5 bg-accent/10 text-accent text-xs font-semibold rounded-lg border border-accent/30 hover:bg-accent/20 transition">
@@ -3198,6 +3438,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
           >
             <colgroup>
               <col style={{ width: 40 }} />{/* checkbox */}
+              <col style={{ width: 28 }} />{/* favorite star */}
               <col style={{ width: 40 }} />{/* # */}
               {canReorder && <col style={{ width: 28 }} />}{/* drag handle */}
               {orderedColumns.map(col => (
@@ -3216,6 +3457,9 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
                       className="fancy-check"
                     />
                   )}
+                </th>
+                <th className="text-center text-[11px] font-semibold text-text3/40 uppercase tracking-wider px-0.5 py-2.5 bg-page-bg/80 backdrop-blur-sm w-7 sticky top-0 z-10">
+                  <svg className="w-3.5 h-3.5 mx-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" /></svg>
                 </th>
                 <th onClick={handleSortById} className="group/th text-center text-[11px] font-semibold text-text3 uppercase tracking-wider px-2 py-2.5 bg-page-bg/80 backdrop-blur-sm w-10 sticky top-0 z-10 select-none hover:text-text2 transition">
                   #
@@ -3308,6 +3552,15 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
                         />
                       )}
                     </td>
+                    <td className="text-center px-0.5 py-2">
+                      <button
+                        onClick={() => persist(skits.map(s => s.id === skit.id ? { ...s, favorite: !s.favorite } : s))}
+                        className={`p-0.5 rounded transition-all ${skit.favorite ? "text-t-wine" : "text-text3/20 hover:text-t-wine/60"}`}
+                        title={skit.favorite ? "Unfavorite" : "Favorite"}
+                      >
+                        <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill={skit.favorite ? "currentColor" : "none"} stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M11.48 3.499a.562.562 0 0 1 1.04 0l2.125 5.111a.563.563 0 0 0 .475.345l5.518.442c.499.04.701.663.321.988l-4.204 3.602a.563.563 0 0 0-.182.557l1.285 5.385a.562.562 0 0 1-.84.61l-4.725-2.885a.562.562 0 0 0-.586 0L6.982 20.54a.562.562 0 0 1-.84-.61l1.285-5.386a.562.562 0 0 0-.182-.557l-4.204-3.602a.562.562 0 0 1 .321-.988l5.518-.442a.563.563 0 0 0 .475-.345L11.48 3.5Z" /></svg>
+                      </button>
+                    </td>
                     <td className="text-center px-2 py-2 text-[11px] text-text3 font-mono">{globalIdx}</td>
                     {canReorder && (
                       <td className="px-1 py-2 text-text3/40 cursor-grab active:cursor-grabbing select-none text-center text-sm">⠿</td>
@@ -3384,7 +3637,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
               })}
               {pageData.length === 0 && (
                 <tr>
-                  <td colSpan={orderedColumns.length + 3 + (canReorder ? 1 : 0)} className="text-center py-20">
+                  <td colSpan={orderedColumns.length + 4 + (canReorder ? 1 : 0)} className="text-center py-20">
                     <div className="flex flex-col items-center gap-2">
                       <svg className="w-10 h-10 text-text3/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}><path strokeLinecap="round" strokeLinejoin="round" d="m15.75 10.5 4.72-4.72a.75.75 0 0 1 1.28.53v11.38a.75.75 0 0 1-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 0 0 2.25-2.25v-9a2.25 2.25 0 0 0-2.25-2.25h-9A2.25 2.25 0 0 0 2.25 7.5v9a2.25 2.25 0 0 0 2.25 2.25Z"/></svg>
                       <p className="text-sm text-text3">{skits.length === 0 ? "No skits yet" : "No skits match your filters"}</p>
@@ -4956,6 +5209,167 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
           getStatusStyle={(name) => { const s = STATUS_STYLES[name] || STATUS_STYLES["Idea"]; return { bg: s.bg, text: s.text }; }}
           readOnly={readOnly}
         />
+      )}
+
+      {/* ─── Duplicate Merge Modal ─── */}
+      {dupeOpen && dupeGroups && dupeGroups.length > 0 && createPortal(
+        <>
+          <div className="fixed inset-0 bg-black/60 backdrop-blur-sm" style={{ zIndex: 10000 }} onClick={() => setDupeOpen(false)} />
+          <div className="fixed inset-0 flex items-center justify-center p-4" style={{ zIndex: 10001, pointerEvents: "none" }}>
+            <div className="w-full max-w-2xl dropdown-menu rounded-2xl shadow-2xl flex flex-col max-h-[80vh] animate-slide-up" style={{ pointerEvents: "auto" }}>
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 pt-5 pb-3 shrink-0">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-t-amber/15 flex items-center justify-center">
+                    <svg className="w-4 h-4 text-t-amber" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-foreground">{dupeGroups.length} duplicate group{dupeGroups.length > 1 ? "s" : ""} found</h3>
+                    <p className="text-[11px] text-text3 mt-0.5">Select which skit to keep in each group, or merge all (keeps latest)</p>
+                  </div>
+                </div>
+                <button onClick={() => setDupeOpen(false)} className="p-1.5 rounded-lg text-text3 hover:text-foreground hover:bg-hover-row transition">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+                </button>
+              </div>
+
+              {/* Body */}
+              <div className="flex-1 overflow-y-auto px-5 pb-3 space-y-4">
+                {dupeGroups.map((group, gi) => {
+                  const isUrl = group.key.startsWith("url:");
+                  const label = isUrl ? group.key.slice(4) : group.key.slice(6);
+                  return (
+                    <div key={group.key} className="border border-border rounded-xl overflow-hidden">
+                      <div className="px-3 py-2 bg-hover-row/50 border-b border-border flex items-center justify-between">
+                        <p className="text-[11px] text-text3 font-medium truncate">
+                          {isUrl ? "Same link: " : "Same title: "}
+                          <span className="text-foreground">{label}</span>
+                        </p>
+                        <span className="text-[10px] text-text3 shrink-0 ml-2">{group.skits.length} copies</span>
+                      </div>
+                      <div className="divide-y divide-border">
+                        {group.skits.map((skit, si) => (
+                          <label key={skit.id} className={`flex items-start gap-3 px-3 py-3 cursor-pointer hover:bg-hover-row/50 transition ${dupeSelections[group.key] === skit.id ? "bg-accent/5 ring-1 ring-inset ring-accent/20" : ""}`}>
+                            <input
+                              type="radio"
+                              name={`dupe-${gi}`}
+                              checked={dupeSelections[group.key] === skit.id}
+                              onChange={() => setDupeSelections(prev => ({ ...prev, [group.key]: skit.id }))}
+                              className="accent-accent mt-0.5"
+                            />
+                            <div className="flex-1 min-w-0 space-y-1.5">
+                              <div className="flex items-center gap-2">
+                                <p className="text-xs font-medium text-foreground truncate">{skit.inspiration || "(no title)"}</p>
+                                {skit.approved === true && <span className="text-[10px] px-1.5 py-0.5 rounded bg-t-green/10 text-t-green font-medium shrink-0">approved</span>}
+                                {skit.approved === false && <span className="text-[10px] px-1.5 py-0.5 rounded bg-t-rose/10 text-t-rose font-medium shrink-0">rejected</span>}
+                                {si === 0 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent font-medium shrink-0">latest</span>}
+                                {si === group.skits.length - 1 && <span className="text-[10px] px-1.5 py-0.5 rounded bg-t-sky/10 text-t-sky font-medium shrink-0">oldest</span>}
+                              </div>
+                              {/* All fields grid */}
+                              <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                                {skit.links && (
+                                  <div className="col-span-2 flex items-center gap-1">
+                                    <span className="text-[10px] text-text3 shrink-0">Link:</span>
+                                    <span className="text-[10px] text-accent truncate">{skit.links}</span>
+                                  </div>
+                                )}
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-text3">Category:</span>
+                                  {skit.category ? <span className="text-[10px] px-1.5 py-0.5 rounded bg-accent/10 text-accent">{skit.category}</span> : <span className="text-[10px] text-text3/40">—</span>}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-text3">Status:</span>
+                                  {skit.status ? <span className="text-[10px] text-foreground">{skit.status}</span> : <span className="text-[10px] text-text3/40">—</span>}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-text3">Env:</span>
+                                  {skit.environment ? <span className="text-[10px] text-foreground">{skit.environment}</span> : <span className="text-[10px] text-text3/40">—</span>}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-text3">Cast:</span>
+                                  {skit.castSize ? <span className="text-[10px] text-foreground">{skit.castSize}</span> : <span className="text-[10px] text-text3/40">—</span>}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-text3">Characters:</span>
+                                  {skit.characters ? <span className="text-[10px] text-foreground">{skit.characters}</span> : <span className="text-[10px] text-text3/40">—</span>}
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-text3">Style Ref:</span>
+                                  {skit.styleRef ? <span className="text-[10px] text-foreground">{skit.styleRef}</span> : <span className="text-[10px] text-text3/40">—</span>}
+                                </div>
+                                {skit.script && (
+                                  <div className="col-span-2 flex items-start gap-1">
+                                    <span className="text-[10px] text-text3 shrink-0">Script:</span>
+                                    <span className="text-[10px] text-foreground line-clamp-2">{skit.script.slice(0, 120)}{skit.script.length > 120 ? "..." : ""}</span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Footer */}
+              <div className="px-5 py-4 border-t border-border flex items-center justify-between shrink-0">
+                <p className="text-[11px] text-text3">
+                  {dupeGroups.reduce((sum, g) => sum + g.skits.length - 1, 0)} duplicate{dupeGroups.reduce((sum, g) => sum + g.skits.length - 1, 0) !== 1 ? "s" : ""} will be removed
+                </p>
+                <div className="flex gap-2">
+                  <button onClick={() => {
+                    // Keep oldest — last item in each group (highest sort_order = added earliest)
+                    const idsToRemove: string[] = [];
+                    for (const g of dupeGroups) {
+                      for (let i = 0; i < g.skits.length - 1; i++) idsToRemove.push(g.skits[i].id);
+                    }
+                    const snapshot = [...skits];
+                    deleteSkits(idsToRemove);
+                    showToast(`Kept oldest, removed ${idsToRemove.length} duplicate${idsToRemove.length !== 1 ? "s" : ""}`, () => persist(snapshot));
+                    setDupeOpen(false);
+                    setDupeGroups(null);
+                  }} className="px-3 py-2 bg-input-bg text-text2 text-xs font-semibold rounded-lg border border-border hover:bg-hover-row transition">
+                    Keep Oldest
+                  </button>
+                  <button onClick={() => {
+                    // Keep latest — first item in each group (lowest sort_order = added most recently)
+                    const idsToRemove: string[] = [];
+                    for (const g of dupeGroups) {
+                      for (let i = 1; i < g.skits.length; i++) idsToRemove.push(g.skits[i].id);
+                    }
+                    const snapshot = [...skits];
+                    deleteSkits(idsToRemove);
+                    showToast(`Kept latest, removed ${idsToRemove.length} duplicate${idsToRemove.length !== 1 ? "s" : ""}`, () => persist(snapshot));
+                    setDupeOpen(false);
+                    setDupeGroups(null);
+                  }} className="px-3 py-2 bg-input-bg text-text2 text-xs font-semibold rounded-lg border border-border hover:bg-hover-row transition">
+                    Keep Latest
+                  </button>
+                  <button onClick={() => {
+                    // Apply manual selection
+                    const idsToRemove: string[] = [];
+                    for (const g of dupeGroups) {
+                      const keepId = dupeSelections[g.key];
+                      for (const s of g.skits) {
+                        if (s.id !== keepId) idsToRemove.push(s.id);
+                      }
+                    }
+                    const snapshot = [...skits];
+                    deleteSkits(idsToRemove);
+                    showToast(`Removed ${idsToRemove.length} duplicate${idsToRemove.length !== 1 ? "s" : ""}`, () => persist(snapshot));
+                    setDupeOpen(false);
+                    setDupeGroups(null);
+                  }} className="px-4 py-2 bg-accent text-white text-xs font-semibold rounded-lg hover:bg-accent-hover shadow-sm shadow-accent/20 transition">
+                    Apply Selection
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </>,
+        document.body
       )}
 
       {/* ─── Toasts ─── */}

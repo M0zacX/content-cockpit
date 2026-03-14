@@ -23,6 +23,7 @@ interface DbSkit {
   environment: string;
   status: string;
   approved?: boolean | null;
+  favorite?: boolean;
   is_public?: boolean;
   sort_order?: number;
   created_at: string;
@@ -64,6 +65,7 @@ function dbToSkit(d: DbSkit): Skit {
     environment: d.environment,
     status: d.status,
     approved: d.approved ?? null,
+    favorite: d.favorite ?? false,
     isPublic: d.is_public ?? false,
     sort_order: d.sort_order ?? 0,
   };
@@ -84,6 +86,7 @@ function skitToDb(s: Skit, userId: string, boardId: string): Omit<DbSkit, "creat
     environment: s.environment,
     status: s.status,
     approved: s.approved ?? null,
+    favorite: s.favorite ?? false,
     is_public: s.isPublic ?? false,
     sort_order: s.sort_order ?? 0,
   };
@@ -283,14 +286,34 @@ export function useSupabaseData(boardId: string | null) {
   }, [supabase, boardId]);
 
   /* ─── Persist skits (debounced upsert) ─── */
+  // Track which DB columns exist (auto-detected on first sync)
+  const dbHasFavorite = useRef<boolean | null>(null);
+
   const debouncedSkitSync = useDebouncedCallback(async (nextSkits: Skit[]) => {
     if (!user || !boardId) return;
-    const dbRows = nextSkits.map(s => ({
-      ...skitToDb(s, user.id, boardId),
-      updated_at: new Date().toISOString(),
-    }));
+    const dbRows = nextSkits.map(s => {
+      const row: Record<string, unknown> = {
+        ...skitToDb(s, user.id, boardId),
+        updated_at: new Date().toISOString(),
+      };
+      // Strip favorite if column doesn't exist yet (remove once migration is run)
+      if (dbHasFavorite.current === false) delete row.favorite;
+      return row;
+    });
     const { error } = await supabase.from("skits").upsert(dbRows, { onConflict: "id" });
-    if (error) console.error("Skit sync error:", error.message);
+    if (error) {
+      if (error.message.includes("'favorite'") && dbHasFavorite.current === null) {
+        // Column doesn't exist — retry without it
+        dbHasFavorite.current = false;
+        const retryRows = dbRows.map(r => { const { favorite: _, ...rest } = r as Record<string, unknown> & { favorite?: unknown }; return rest; });
+        const { error: e2 } = await supabase.from("skits").upsert(retryRows, { onConflict: "id" });
+        if (e2) console.error("Skit sync error:", e2.message);
+      } else {
+        console.error("Skit sync error:", error.message);
+      }
+    } else {
+      if (dbHasFavorite.current === null) dbHasFavorite.current = true;
+    }
   }, 500);
 
   const persistSkits = useCallback(
