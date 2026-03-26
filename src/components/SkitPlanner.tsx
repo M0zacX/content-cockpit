@@ -1398,6 +1398,8 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
   const editorEnvInputRef = useRef<HTMLInputElement>(null);
   const editorEnvDropRef = useRef<HTMLDivElement>(null);
   const editorInfBtnRef = useRef<HTMLButtonElement>(null);
+  const [ttsPlaying, setTtsPlaying] = useState(false);
+  const [ttsCurrentLine, setTtsCurrentLine] = useState<number | null>(null);
   const [scriptLinkCopied, setScriptLinkCopied] = useState(false);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [mobileEnvOpen, setMobileEnvOpen] = useState(false);
@@ -1679,14 +1681,20 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
     if (!scriptEditorSkitId) return;
     const handler = (e: globalThis.KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
-      if (e.key === "Escape") { e.preventDefault(); setScriptEditorSkitId(null); }
-      if (mod && e.key === "Enter") { e.preventDefault(); setScriptEditorSkitId(null); }
-      if (mod && e.key === "ArrowUp" && prevSkitId) { e.preventDefault(); setScriptEditorSkitId(prevSkitId); }
-      if (mod && e.key === "ArrowDown" && nextSkitId) { e.preventDefault(); setScriptEditorSkitId(nextSkitId); }
+      if (e.key === "Escape") { e.preventDefault(); stopTTS(); setScriptEditorSkitId(null); }
+      if (mod && e.key === "Enter") { e.preventDefault(); stopTTS(); setScriptEditorSkitId(null); }
+      if (mod && e.key === "ArrowUp" && prevSkitId) { e.preventDefault(); stopTTS(); setScriptEditorSkitId(prevSkitId); }
+      if (mod && e.key === "ArrowDown" && nextSkitId) { e.preventDefault(); stopTTS(); setScriptEditorSkitId(nextSkitId); }
     };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [scriptEditorSkitId, prevSkitId, nextSkitId]);
+
+  // Auto-scroll to the line being spoken
+  useEffect(() => {
+    if (ttsCurrentLine === null) return;
+    document.getElementById(`tts-line-${ttsCurrentLine}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
+  }, [ttsCurrentLine]);
 
   /* ─── Stats ─── */
   const total = skits.length;
@@ -1707,6 +1715,71 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
   }, [readOnly, skits, persist]);
 
   /* ─── Add row ─── */
+  /* ─── TTS read-aloud ─── */
+  function stopTTS() {
+    if (typeof window !== "undefined") window.speechSynthesis?.cancel();
+    setTtsPlaying(false);
+    setTtsCurrentLine(null);
+  }
+
+  function playScript() {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
+    const synth = window.speechSynthesis;
+    synth.cancel();
+    const lines = parsedLines.filter(l => l.line.trim());
+    if (!lines.length) return;
+
+    const chars = [...new Set(lines.filter(l => l.char !== "[Direction]").map(l => l.char))];
+    const pitches = [1.0, 0.72, 1.28, 0.58, 1.45];
+    const rates   = [1.0, 0.93, 1.06, 0.88, 1.08];
+
+    function buildConfig(voices: SpeechSynthesisVoice[]) {
+      const cfg: Record<string, { voice?: SpeechSynthesisVoice; pitch: number; rate: number }> = {};
+      // Prefer English voices; sort to put named/distinct ones first
+      const engVoices = voices.filter(v => v.lang.startsWith("en"));
+      const pool = engVoices.length >= chars.length ? engVoices : voices;
+      chars.forEach((char, i) => {
+        cfg[char] = { voice: pool[i % pool.length], pitch: pitches[i % pitches.length], rate: rates[i % rates.length] };
+      });
+      return cfg;
+    }
+
+    function run(voices: SpeechSynthesisVoice[]) {
+      const cfg = buildConfig(voices);
+      let idx = 0;
+      setTtsPlaying(true);
+
+      function next() {
+        if (idx >= lines.length) { stopTTS(); return; }
+        const pl = lines[idx++];
+        const isDir = pl.char === "[Direction]";
+        const text = isDir
+          ? pl.line.replace(/^\[|\]$/g, "").replace(/^-+$/, "scene break")
+          : pl.line.replace(/^\s*[^:]+:\s*/, "");
+        if (!text.trim()) { next(); return; }
+
+        const utt = new SpeechSynthesisUtterance(text);
+        if (!isDir && cfg[pl.char]?.voice) utt.voice = cfg[pl.char].voice!;
+        utt.pitch  = isDir ? 0.85 : (cfg[pl.char]?.pitch ?? 1);
+        utt.rate   = isDir ? 0.82 : (cfg[pl.char]?.rate  ?? 1);
+        utt.volume = isDir ? 0.55 : 1;
+        utt.onstart = () => setTtsCurrentLine(pl.lineNum);
+        utt.onend   = next;
+        utt.onerror = next;
+        synth.speak(utt);
+      }
+      next();
+    }
+
+    const voices = synth.getVoices();
+    if (voices.length > 0) {
+      run(voices);
+    } else {
+      // Chrome loads voices async on first call
+      synth.addEventListener("voiceschanged", () => run(synth.getVoices()), { once: true });
+    }
+  }
+
   const addRow = useCallback(() => {
     const newSkit: Skit = { id: crypto.randomUUID(), inspiration: "", links: "", castSize: "1", characters: "", category: "", styleRef: "", script: "", environment: "", status: "Idea", approved: null, sort_order: 0 };
     persist([newSkit, ...skits].map((s, i) => ({ ...s, sort_order: i })));
@@ -3805,8 +3878,27 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
                 </button>
               ) : null}
 
+              {/* Read aloud */}
+              {!scriptEditing && editingSkit.script && (
+                <button
+                  onClick={ttsPlaying ? stopTTS : playScript}
+                  className={`hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition border ${
+                    ttsPlaying
+                      ? "bg-t-rose/15 text-t-rose border-t-rose/30 hover:bg-t-rose/25"
+                      : "bg-input-bg text-text2 border-border hover:bg-hover-row"
+                  }`}
+                  title={ttsPlaying ? "Stop reading (Esc)" : "Read script aloud"}
+                >
+                  {ttsPlaying ? (
+                    <><svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></svg>Stop</>
+                  ) : (
+                    <><svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.75}><path strokeLinecap="round" strokeLinejoin="round" d="M19.114 5.636a9 9 0 0 1 0 12.728M16.463 8.288a5.25 5.25 0 0 1 0 7.424M6.75 8.25l4.72-4.72a.75.75 0 0 1 1.28.53v15.88a.75.75 0 0 1-1.28.53l-4.72-4.72H4.51c-.88 0-1.704-.507-1.938-1.354A9.009 9.009 0 0 1 2.25 12c0-.83.112-1.633.322-2.396C2.806 8.756 3.63 8.25 4.51 8.25H6.75Z"/></svg>Read</>
+                  )}
+                </button>
+              )}
+
               {/* Close */}
-              <button onClick={() => { if (scriptEditing) { setScriptEditing(false); } setScriptEditorSkitId(null); }} className="p-1.5 rounded-lg hover:bg-hover-row transition text-text2">
+              <button onClick={() => { stopTTS(); if (scriptEditing) { setScriptEditing(false); } setScriptEditorSkitId(null); }} className="p-1.5 rounded-lg hover:bg-hover-row transition text-text2">
                 <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
               </button>
             </div>
@@ -4055,7 +4147,23 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
                   /* Read-only view */
                   <div className="flex-1 overflow-y-auto p-3 lg:p-6">
                     {editingSkit.script ? (
-                      <pre className="text-base leading-relaxed font-mono whitespace-pre-wrap text-foreground">{editingSkit.script}</pre>
+                      parsedLines.length > 0 ? (
+                        <div className="font-mono text-base leading-relaxed">
+                          {parsedLines.map((pl, i) => (
+                            <div
+                              key={i}
+                              id={`tts-line-${pl.lineNum}`}
+                              className={`whitespace-pre-wrap px-1 -mx-1 rounded transition-colors ${
+                                ttsCurrentLine === pl.lineNum ? "bg-accent/20 text-foreground" : "text-foreground"
+                              }`}
+                            >
+                              {pl.line || "\u00A0"}
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <pre className="text-base leading-relaxed font-mono whitespace-pre-wrap text-foreground">{editingSkit.script}</pre>
+                      )
                     ) : (
                       <div className="flex flex-col items-center justify-center h-full text-center py-16">
                         <svg className="w-12 h-12 text-text3 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1}><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 0 0-3.375-3.375h-1.5A1.125 1.125 0 0 1 13.5 7.125v-1.5a3.375 3.375 0 0 0-3.375-3.375H8.25m2.25 0H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 0 0-9-9Z"/></svg>
@@ -4144,7 +4252,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
           <div className="shrink-0 border-t border-border/40 bg-input-bg">
             <div className="flex items-center gap-1 px-2 py-1.5">
               <button
-                onClick={() => prevSkitId && setScriptEditorSkitId(prevSkitId)}
+                onClick={() => { stopTTS(); prevSkitId && setScriptEditorSkitId(prevSkitId); }}
                 disabled={!prevSkitId}
                 className="flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left hover:bg-hover-row transition disabled:opacity-30 disabled:cursor-not-allowed group min-w-0"
               >
@@ -4155,7 +4263,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
               </button>
               <span className="text-[11px] text-text3 font-medium shrink-0 px-2 tabular-nums">{editorIdx + 1} / {filtered.length}</span>
               <button
-                onClick={() => nextSkitId && setScriptEditorSkitId(nextSkitId)}
+                onClick={() => { stopTTS(); nextSkitId && setScriptEditorSkitId(nextSkitId); }}
                 disabled={!nextSkitId}
                 className="flex-1 flex items-center justify-end gap-2 px-2.5 py-1.5 rounded-lg text-right hover:bg-hover-row transition disabled:opacity-30 disabled:cursor-not-allowed group min-w-0"
               >
