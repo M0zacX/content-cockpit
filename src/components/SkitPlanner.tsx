@@ -1726,20 +1726,35 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     const synth = window.speechSynthesis;
     synth.cancel();
-    const lines = parsedLines.filter(l => l.line.trim());
+    // Only dialogue lines — skip all directions
+    const lines = parsedLines.filter(l => l.line.trim() && l.char !== "[Direction]");
     if (!lines.length) return;
 
-    const chars = [...new Set(lines.filter(l => l.char !== "[Direction]").map(l => l.char))];
-    const pitches = [1.0, 0.72, 1.28, 0.58, 1.45];
-    const rates   = [1.0, 0.93, 1.06, 0.88, 1.08];
+    const chars = [...new Set(lines.map(l => l.char))];
+    const pitches = [1.0, 0.7, 1.3, 0.55, 1.5];
+    const rates   = [1.0, 0.92, 1.07, 0.88, 1.1];
 
     function buildConfig(voices: SpeechSynthesisVoice[]) {
+      const eng = voices.filter(v => v.lang.startsWith("en"));
+      // Prefer neural/natural voices (Edge has "Natural", Chrome has "Google" named ones)
+      const neural = eng.filter(v => v.name.includes("Natural") || v.name.includes("Online"));
+      const pool = (neural.length >= 2 ? neural : eng.length >= 2 ? eng : voices);
+      // Split into rough male/female buckets for better contrast
+      const maleKw  = ["male", "guy", "david", "mark", "james", "ryan", "eric", "liam"];
+      const femaleKw = ["female", "aria", "jenny", "zira", "susan", "kate", "emma", "natasha", "ava"];
+      const males   = pool.filter(v => maleKw.some(k => v.name.toLowerCase().includes(k)));
+      const females = pool.filter(v => femaleKw.some(k => v.name.toLowerCase().includes(k)));
+      const hasBoth = males.length > 0 && females.length > 0;
+
       const cfg: Record<string, { voice?: SpeechSynthesisVoice; pitch: number; rate: number }> = {};
-      // Prefer English voices; sort to put named/distinct ones first
-      const engVoices = voices.filter(v => v.lang.startsWith("en"));
-      const pool = engVoices.length >= chars.length ? engVoices : voices;
       chars.forEach((char, i) => {
-        cfg[char] = { voice: pool[i % pool.length], pitch: pitches[i % pitches.length], rate: rates[i % rates.length] };
+        let voice: SpeechSynthesisVoice | undefined;
+        if (hasBoth) {
+          voice = i % 2 === 0 ? males[Math.floor(i / 2) % males.length] : females[Math.floor(i / 2) % females.length];
+        } else {
+          voice = pool[i % pool.length];
+        }
+        cfg[char] = { voice, pitch: pitches[i % pitches.length], rate: rates[i % rates.length] };
       });
       return cfg;
     }
@@ -1752,17 +1767,13 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
       function next() {
         if (idx >= lines.length) { stopTTS(); return; }
         const pl = lines[idx++];
-        const isDir = pl.char === "[Direction]";
-        const text = isDir
-          ? pl.line.replace(/^\[|\]$/g, "").replace(/^-+$/, "scene break")
-          : pl.line.replace(/^\s*[^:]+:\s*/, "");
+        const text = pl.line.replace(/^\s*[^:]+:\s*/, "");
         if (!text.trim()) { next(); return; }
 
         const utt = new SpeechSynthesisUtterance(text);
-        if (!isDir && cfg[pl.char]?.voice) utt.voice = cfg[pl.char].voice!;
-        utt.pitch  = isDir ? 0.85 : (cfg[pl.char]?.pitch ?? 1);
-        utt.rate   = isDir ? 0.82 : (cfg[pl.char]?.rate  ?? 1);
-        utt.volume = isDir ? 0.55 : 1;
+        if (cfg[pl.char]?.voice) utt.voice = cfg[pl.char].voice!;
+        utt.pitch  = cfg[pl.char]?.pitch ?? 1;
+        utt.rate   = cfg[pl.char]?.rate  ?? 1;
         utt.onstart = () => setTtsCurrentLine(pl.lineNum);
         utt.onend   = next;
         utt.onerror = next;
@@ -1775,7 +1786,6 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
     if (voices.length > 0) {
       run(voices);
     } else {
-      // Chrome loads voices async on first call
       synth.addEventListener("voiceschanged", () => run(synth.getVoices()), { once: true });
     }
   }
