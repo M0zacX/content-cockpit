@@ -1391,6 +1391,13 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
   const [showCharDropdown, setShowCharDropdown] = useState(false);
   const [scriptEditing, setScriptEditing] = useState(false);
   const [scriptDraft, setScriptDraft] = useState("");
+  const [editorMetaField, setEditorMetaField] = useState<string | null>(null);
+  const [editorEnvPos, setEditorEnvPos] = useState<{ top: number; left: number } | null>(null);
+  const [editorEnvHl, setEditorEnvHl] = useState(0);
+  const [editorInfPos, setEditorInfPos] = useState<{ top: number; left: number } | null>(null);
+  const editorEnvInputRef = useRef<HTMLInputElement>(null);
+  const editorEnvDropRef = useRef<HTMLDivElement>(null);
+  const editorInfBtnRef = useRef<HTMLButtonElement>(null);
   const [scriptLinkCopied, setScriptLinkCopied] = useState(false);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [mobileEnvOpen, setMobileEnvOpen] = useState(false);
@@ -3804,21 +3811,162 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
               </button>
             </div>
 
-            {/* Desktop Row 2: Title + metadata (hidden on mobile) */}
-            <div className="hidden lg:flex px-4 pb-2.5 items-center gap-2.5 flex-wrap">
-              <h2 className="text-sm font-semibold text-foreground truncate max-w-[400px]">{editingSkit.inspiration || "Untitled Skit"}</h2>
-              {editingSkit.category && (() => { const cs = getCategoryStyle(editingSkit.category); return (
+            {/* Desktop Row 2: Editable metadata (hidden on mobile) */}
+            <div className="hidden lg:flex px-4 pb-2.5 items-center gap-2 flex-wrap">
+              {/* Title */}
+              {!readOnly && editorMetaField === "inspiration" ? (
+                <input
+                  autoFocus
+                  value={editingSkit.inspiration}
+                  onChange={e => updateSkit(editingSkit.id, "inspiration", e.target.value)}
+                  onBlur={() => setEditorMetaField(null)}
+                  onKeyDown={e => { if (e.key === "Enter" || e.key === "Escape") { e.preventDefault(); setEditorMetaField(null); } }}
+                  className="text-sm font-semibold text-foreground bg-transparent border-b border-accent outline-none max-w-[400px] placeholder:text-text3"
+                  placeholder="Untitled Skit"
+                />
+              ) : (
+                <h2
+                  className={`text-sm font-semibold text-foreground truncate max-w-[400px] ${!readOnly ? "cursor-text hover:opacity-70 transition-opacity" : ""}`}
+                  onClick={() => !readOnly && setEditorMetaField("inspiration")}
+                >
+                  {editingSkit.inspiration || "Untitled Skit"}
+                </h2>
+              )}
+              {/* Category */}
+              {!readOnly ? (
+                <CellDropdown
+                  value={editingSkit.category}
+                  options={dynamicCategoryOptions}
+                  onChange={v => updateSkit(editingSkit.id, "category", v)}
+                  pillBg={getCategoryStyle(editingSkit.category || "").bg}
+                  pillText={getCategoryStyle(editingSkit.category || "").text}
+                />
+              ) : editingSkit.category ? (() => { const cs = getCategoryStyle(editingSkit.category); return (
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${cs.bg} ${cs.text}`}>
                   <span className={`w-1.5 h-1.5 rounded-full ${cs.dot}`} />{editingSkit.category}
                 </span>
-              ); })()}
-              {(() => { const ss = STATUS_STYLES[editingSkit.status]; return ss ? (
+              ); })() : null}
+              {/* Status */}
+              {!readOnly ? (
+                <CellDropdown
+                  value={editingSkit.status}
+                  options={STATUS_OPTIONS}
+                  onChange={v => updateSkit(editingSkit.id, "status", v)}
+                  pillBg={STATUS_STYLES[editingSkit.status]?.bg || "bg-input-bg"}
+                  pillText={STATUS_STYLES[editingSkit.status]?.text || "text-text2"}
+                />
+              ) : (() => { const ss = STATUS_STYLES[editingSkit.status]; return ss ? (
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold ${ss.bg} ${ss.text}`}>
                   <span className="text-[10px]">{ss.icon}</span>{editingSkit.status}
                 </span>
               ) : null; })()}
-              <span className="text-[11px] text-text3">{editingSkit.castSize} cast &middot; {editingSkit.characters}</span>
-              {editingSkit.styleRef && (() => { const inf = influencers.find(i => i.handle === editingSkit.styleRef); return <span className="inline-flex items-center gap-1 text-[11px] text-text2">{inf ? <><span className="w-4 h-4 rounded-full bg-accent/10 flex items-center justify-center text-[7px] font-bold text-accent">{inf.avatar}</span>{inf.handle}</> : editingSkit.styleRef}</span>; })()}
+              {/* Cast size */}
+              {!readOnly && editorMetaField === "castSize" ? (
+                <span className="flex items-center gap-1">
+                  <input
+                    autoFocus
+                    type="number"
+                    min={1}
+                    value={editingSkit.castSize}
+                    onChange={e => updateSkit(editingSkit.id, "castSize", e.target.value)}
+                    onBlur={() => setEditorMetaField(null)}
+                    onKeyDown={e => { if (e.key === "Enter" || e.key === "Escape") { e.preventDefault(); setEditorMetaField(null); } }}
+                    className="w-10 text-[11px] text-center text-text2 bg-transparent border-b border-accent outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  />
+                  <span className="text-[11px] text-text3">cast · {editingSkit.characters}</span>
+                </span>
+              ) : (
+                <span
+                  className={`text-[11px] text-text3 ${!readOnly ? "cursor-text hover:text-foreground transition-colors" : ""}`}
+                  onClick={() => !readOnly && setEditorMetaField("castSize")}
+                >
+                  {editingSkit.castSize} cast · {editingSkit.characters}
+                </span>
+              )}
+              {/* Style ref (influencer picker) */}
+              <div className="relative flex items-center">
+                <button
+                  ref={editorInfBtnRef}
+                  onClick={() => {
+                    if (editorMetaField === "styleRef") { setEditorMetaField(null); setInfPickerSearch(""); setEditorInfPos(null); }
+                    else { setEditorMetaField("styleRef"); setInfPickerSearch(""); if (editorInfBtnRef.current) { const r = editorInfBtnRef.current.getBoundingClientRect(); setEditorInfPos({ top: r.bottom + 4, left: r.left }); } }
+                  }}
+                  disabled={readOnly}
+                  className={`flex items-center gap-1.5 text-[11px] px-1.5 py-0.5 rounded transition ${editorMetaField === "styleRef" ? "bg-accent/10 text-accent" : !readOnly ? "text-text2 hover:bg-hover-row" : "text-text2 cursor-default"}`}
+                >
+                  {(() => { const inf = influencers.find(i => i.handle === editingSkit.styleRef); return editingSkit.styleRef ? (
+                    inf ? <><span className="w-4 h-4 rounded-full bg-accent/10 flex items-center justify-center text-[7px] font-bold text-accent shrink-0">{inf.avatar}</span><span>{inf.handle}</span></> : <span>{editingSkit.styleRef}</span>
+                  ) : (!readOnly ? <span className="text-text3">+ Style ref</span> : null); })()}
+                </button>
+                {editorMetaField === "styleRef" && !readOnly && editorInfPos && createPortal(
+                  <>
+                    <div className="fixed inset-0" style={{ zIndex: 9998 }} onClick={() => { setEditorMetaField(null); setInfPickerSearch(""); setEditorInfPos(null); }} />
+                    <div className="fixed dropdown-menu rounded-xl shadow-2xl overflow-hidden animate-slide-up" style={{ zIndex: 9999, top: editorInfPos.top, left: editorInfPos.left, width: 240 }}>
+                      <div className="p-2 border-b border-border">
+                        <input
+                          autoFocus
+                          value={infPickerSearch}
+                          onChange={e => setInfPickerSearch(e.target.value)}
+                          onKeyDown={e => { if (e.key === "Escape") { setEditorMetaField(null); setInfPickerSearch(""); setEditorInfPos(null); } }}
+                          placeholder="Search influencer..."
+                          className="w-full px-2 py-1.5 bg-input-bg border border-border rounded-lg text-[11px] text-foreground placeholder:text-text3 focus:outline-none focus:ring-1 focus:ring-accent/30"
+                        />
+                      </div>
+                      <div className="max-h-52 overflow-y-auto py-1">
+                        {editingSkit.styleRef && (
+                          <button onClick={() => { updateSkit(editingSkit.id, "styleRef", ""); setEditorMetaField(null); setInfPickerSearch(""); setEditorInfPos(null); }} className="w-full px-3 py-1.5 text-left text-[11px] text-text3 hover:bg-hover-row transition">Clear selection</button>
+                        )}
+                        {influencers.filter(inf => { if (!infPickerSearch) return true; const s = infPickerSearch.toLowerCase(); return inf.name.toLowerCase().includes(s) || inf.handle.toLowerCase().includes(s) || (inf.tags || []).some((t: string) => t.toLowerCase().includes(s)); }).sort((a, b) => (b.favorite ? 1 : 0) - (a.favorite ? 1 : 0)).map(inf => (
+                          <button key={inf.id} onClick={() => { updateSkit(editingSkit.id, "styleRef", inf.handle); setEditorMetaField(null); setInfPickerSearch(""); setEditorInfPos(null); }} className={`w-full px-3 py-1.5 text-left hover:bg-hover-row transition flex items-center gap-2 ${editingSkit.styleRef === inf.handle ? "bg-accent/10" : ""}`}>
+                            <span className="w-6 h-6 rounded-full bg-accent/10 flex items-center justify-center text-[8px] font-bold text-accent shrink-0">{inf.avatar}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="text-[11px] font-medium text-foreground truncate">{inf.name}</div>
+                              <div className="text-[9px] text-text3 font-mono">{inf.handle}</div>
+                            </div>
+                            {editingSkit.styleRef === inf.handle && <svg className="w-3.5 h-3.5 text-accent shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </>,
+                  document.body
+                )}
+              </div>
+              {/* Environment */}
+              <div className="relative flex items-center">
+                {!readOnly && editorMetaField === "environment" ? (
+                  <>
+                    <input
+                      ref={editorEnvInputRef}
+                      autoFocus
+                      value={editingSkit.environment}
+                      onChange={e => { updateSkit(editingSkit.id, "environment", e.target.value); setEditorEnvHl(0); if (editorEnvInputRef.current) { const r = editorEnvInputRef.current.getBoundingClientRect(); setEditorEnvPos({ top: r.bottom + 4, left: r.left }); } }}
+                      onFocus={() => { setEditorEnvHl(0); if (editorEnvInputRef.current) { const r = editorEnvInputRef.current.getBoundingClientRect(); setEditorEnvPos({ top: r.bottom + 4, left: r.left }); } }}
+                      onBlur={() => { setEditorMetaField(null); setEditorEnvPos(null); }}
+                      onKeyDown={e => { const suggs = filterEnvPresets(editingSkit.environment || ""); if (e.key === "Escape") { e.preventDefault(); setEditorMetaField(null); setEditorEnvPos(null); } else if (e.key === "Enter" && suggs.length > 0) { e.preventDefault(); updateSkit(editingSkit.id, "environment", suggs[editorEnvHl] || suggs[0]); setEditorMetaField(null); setEditorEnvPos(null); } else if (e.key === "ArrowDown") { e.preventDefault(); setEditorEnvHl(i => (i + 1) % suggs.length); } else if (e.key === "ArrowUp") { e.preventDefault(); setEditorEnvHl(i => (i - 1 + suggs.length) % suggs.length); } }}
+                      placeholder="Environment..."
+                      className="text-[11px] text-text2 bg-transparent border-b border-accent outline-none placeholder:text-text3 w-36"
+                    />
+                    {editorEnvPos && createPortal(
+                      <div ref={editorEnvDropRef} className="fixed dropdown-menu rounded-xl py-1 max-h-40 overflow-y-auto w-52" style={{ top: editorEnvPos.top, left: editorEnvPos.left, zIndex: 9999 }}>
+                        {filterEnvPresets(editingSkit.environment || "").map((preset, i) => (
+                          <button key={preset} type="button" onMouseEnter={() => setEditorEnvHl(i)} onMouseDown={e => { e.preventDefault(); updateSkit(editingSkit.id, "environment", preset); setEditorMetaField(null); setEditorEnvPos(null); }} className={`w-full text-left px-3 py-1.5 text-xs font-medium transition-colors ${i === editorEnvHl ? "bg-accent/10 text-accent" : "text-text2 hover:bg-hover-row"} ${preset === editingSkit.environment ? "font-bold" : ""}`}>{preset}</button>
+                        ))}
+                      </div>,
+                      document.body
+                    )}
+                  </>
+                ) : (
+                  <button
+                    onClick={() => !readOnly && setEditorMetaField("environment")}
+                    disabled={readOnly}
+                    className={`text-[11px] px-1.5 py-0.5 rounded transition ${!readOnly ? "text-text3 hover:text-foreground hover:bg-hover-row cursor-text" : "text-text3 cursor-default"}`}
+                  >
+                    {editingSkit.environment || (!readOnly ? "+ Environment" : "")}
+                  </button>
+                )}
+              </div>
+              {/* Line/word count */}
               <span className="text-[11px] text-text3">
                 {activeScript ? `${activeScript.split("\n").filter((l: string) => l.trim()).length} lines · ${activeScript.split(/\s+/).filter(Boolean).length} words` : "Empty"}
               </span>
