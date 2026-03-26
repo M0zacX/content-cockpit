@@ -3992,6 +3992,33 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
             )}
           </div>
 
+          {/* ══ NAVIGATION FOOTER ══ */}
+          <div className="shrink-0 border-t border-border/40 bg-input-bg">
+            <div className="flex items-center gap-1 px-2 py-1.5">
+              <button
+                onClick={() => prevSkitId && setScriptEditorSkitId(prevSkitId)}
+                disabled={!prevSkitId}
+                className="flex-1 flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left hover:bg-hover-row transition disabled:opacity-30 disabled:cursor-not-allowed group min-w-0"
+              >
+                <svg className="w-4 h-4 text-text3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/></svg>
+                <span className="text-xs font-medium text-text2 truncate group-hover:text-foreground group-disabled:text-text3 transition">
+                  {prevSkitId ? (filtered.find(s => s.id === prevSkitId)?.inspiration || "Untitled") : "—"}
+                </span>
+              </button>
+              <span className="text-[11px] text-text3 font-medium shrink-0 px-2 tabular-nums">{editorIdx + 1} / {filtered.length}</span>
+              <button
+                onClick={() => nextSkitId && setScriptEditorSkitId(nextSkitId)}
+                disabled={!nextSkitId}
+                className="flex-1 flex items-center justify-end gap-2 px-2.5 py-1.5 rounded-lg text-right hover:bg-hover-row transition disabled:opacity-30 disabled:cursor-not-allowed group min-w-0"
+              >
+                <span className="text-xs font-medium text-text2 truncate group-hover:text-foreground group-disabled:text-text3 transition">
+                  {nextSkitId ? (filtered.find(s => s.id === nextSkitId)?.inspiration || "Untitled") : "—"}
+                </span>
+                <svg className="w-4 h-4 text-text3 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5"/></svg>
+              </button>
+            </div>
+          </div>
+
           {/* ══ BOTTOM BAR — Mobile only ══ */}
           <div className="lg:hidden shrink-0 border-t border-border glass-subtle pb-[env(safe-area-inset-bottom)]">
             {/* Character filter dropdown */}
