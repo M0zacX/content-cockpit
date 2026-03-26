@@ -4068,6 +4068,25 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
                   </button>
                 )}
               </div>
+              {/* Approval */}
+              {!readOnly && (
+                <span className="flex items-center gap-0.5">
+                  <button
+                    onClick={() => updateSkit(editingSkit.id, "approved", editingSkit.approved === true ? null : true)}
+                    className={`p-1 rounded transition-all ${editingSkit.approved === true ? "text-t-green bg-t-green/10" : "text-text3/40 hover:text-t-green hover:bg-t-green/10"}`}
+                    title={editingSkit.approved === true ? "Approved (click to unset)" : "Approve"}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="m4.5 12.75 6 6 9-13.5"/></svg>
+                  </button>
+                  <button
+                    onClick={() => updateSkit(editingSkit.id, "approved", editingSkit.approved === false ? null : false)}
+                    className={`p-1 rounded transition-all ${editingSkit.approved === false ? "text-t-rose bg-t-rose/10" : "text-text3/40 hover:text-t-rose hover:bg-t-rose/10"}`}
+                    title={editingSkit.approved === false ? "Rejected (click to unset)" : "Reject"}
+                  >
+                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12"/></svg>
+                  </button>
+                </span>
+              )}
               {/* Line/word count */}
               <span className="text-[11px] text-text3">
                 {activeScript ? `${activeScript.split("\n").filter((l: string) => l.trim()).length} lines · ${activeScript.split(/\s+/).filter(Boolean).length} words` : "Empty"}
