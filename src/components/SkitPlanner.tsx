@@ -1400,6 +1400,7 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
   const editorInfBtnRef = useRef<HTMLButtonElement>(null);
   const [ttsPlaying, setTtsPlaying] = useState(false);
   const [ttsCurrentLine, setTtsCurrentLine] = useState<number | null>(null);
+  const ttsStoppedRef = useRef(false);
   const [scriptLinkCopied, setScriptLinkCopied] = useState(false);
   const [expandedCardId, setExpandedCardId] = useState<string | null>(null);
   const [mobileEnvOpen, setMobileEnvOpen] = useState(false);
@@ -1717,14 +1718,16 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
   /* ─── Add row ─── */
   /* ─── TTS read-aloud ─── */
   function stopTTS() {
+    ttsStoppedRef.current = true;
     if (typeof window !== "undefined") window.speechSynthesis?.cancel();
     setTtsPlaying(false);
     setTtsCurrentLine(null);
   }
 
-  function playScript() {
+  function playScript(startFromLineNum?: number) {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     const synth = window.speechSynthesis;
+    ttsStoppedRef.current = false;
     synth.cancel();
     // Only dialogue lines — skip all directions
     const lines = parsedLines.filter(l => l.line.trim() && l.char !== "[Direction]");
@@ -1736,10 +1739,8 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
 
     function buildConfig(voices: SpeechSynthesisVoice[]) {
       const eng = voices.filter(v => v.lang.startsWith("en"));
-      // Prefer neural/natural voices (Edge has "Natural", Chrome has "Google" named ones)
       const neural = eng.filter(v => v.name.includes("Natural") || v.name.includes("Online"));
       const pool = (neural.length >= 2 ? neural : eng.length >= 2 ? eng : voices);
-      // Split into rough male/female buckets for better contrast
       const maleKw  = ["male", "guy", "david", "mark", "james", "ryan", "eric", "liam"];
       const femaleKw = ["female", "aria", "jenny", "zira", "susan", "kate", "emma", "natasha", "ava"];
       const males   = pool.filter(v => maleKw.some(k => v.name.toLowerCase().includes(k)));
@@ -1761,10 +1762,14 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
 
     function run(voices: SpeechSynthesisVoice[]) {
       const cfg = buildConfig(voices);
-      let idx = 0;
+      // Start from the first line at or after startFromLineNum
+      let idx = startFromLineNum != null
+        ? Math.max(0, lines.findIndex(l => l.lineNum >= startFromLineNum))
+        : 0;
       setTtsPlaying(true);
 
       function next() {
+        if (ttsStoppedRef.current) return;
         if (idx >= lines.length) { stopTTS(); return; }
         const pl = lines[idx++];
         const text = pl.line.replace(/^\s*[^:]+:\s*/, "");
@@ -1774,9 +1779,9 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
         if (cfg[pl.char]?.voice) utt.voice = cfg[pl.char].voice!;
         utt.pitch  = cfg[pl.char]?.pitch ?? 1;
         utt.rate   = cfg[pl.char]?.rate  ?? 1;
-        utt.onstart = () => setTtsCurrentLine(pl.lineNum);
+        utt.onstart = () => { if (!ttsStoppedRef.current) setTtsCurrentLine(pl.lineNum); };
         utt.onend   = next;
-        utt.onerror = next;
+        utt.onerror = (e) => { if (e.error !== "canceled") next(); };
         synth.speak(utt);
       }
       next();
@@ -4178,17 +4183,25 @@ export default function SkitPlanner({ boardId, boardName, readOnly = false, othe
                     {editingSkit.script ? (
                       parsedLines.length > 0 ? (
                         <div className="font-mono text-base leading-relaxed">
-                          {parsedLines.map((pl, i) => (
+                          {parsedLines.map((pl, i) => {
+                            const isDialogue = pl.char !== "[Direction]" && pl.line.trim();
+                            return (
                             <div
                               key={i}
                               id={`tts-line-${pl.lineNum}`}
+                              onClick={() => isDialogue && playScript(pl.lineNum)}
                               className={`whitespace-pre-wrap px-1 -mx-1 rounded transition-colors ${
-                                ttsCurrentLine === pl.lineNum ? "bg-accent/20 text-foreground" : "text-foreground"
+                                ttsCurrentLine === pl.lineNum
+                                  ? "bg-accent/20 text-foreground"
+                                  : isDialogue
+                                  ? "text-foreground hover:bg-hover-row cursor-pointer"
+                                  : "text-foreground"
                               }`}
                             >
                               {pl.line || "\u00A0"}
                             </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       ) : (
                         <pre className="text-base leading-relaxed font-mono whitespace-pre-wrap text-foreground">{editingSkit.script}</pre>
